@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Baby, 
@@ -31,10 +31,32 @@ export default function App() {
   const [userSession, setUserSession] = useState<UserSession | null>(null);
   const [activeScreen, setActiveScreen] = useState<'overview' | 'scanner' | 'reports'>('overview');
   
-  // Databases States
-  const [donations, setDonations] = useState<DonationItem[]>(INITIAL_DONATIONS);
-  const [needs, setNeeds] = useState<ChildNeed[]>(INITIAL_NEEDS);
-  const [logs, setLogs] = useState<AuditLog[]>(INITIAL_LOGS);
+  // Databases States with LocalStorage Persistence
+  const [donations, setDonations] = useState<DonationItem[]>(() => {
+    const saved = localStorage.getItem('careinventory_donations');
+    return saved ? JSON.parse(saved) : INITIAL_DONATIONS;
+  });
+  const [needs, setNeeds] = useState<ChildNeed[]>(() => {
+    const saved = localStorage.getItem('careinventory_needs');
+    return saved ? JSON.parse(saved) : INITIAL_NEEDS;
+  });
+  const [logs, setLogs] = useState<AuditLog[]>(() => {
+    const saved = localStorage.getItem('careinventory_logs');
+    return saved ? JSON.parse(saved) : INITIAL_LOGS;
+  });
+
+  // Synchronize state changes to localStorage
+  useEffect(() => {
+    localStorage.setItem('careinventory_donations', JSON.stringify(donations));
+  }, [donations]);
+
+  useEffect(() => {
+    localStorage.setItem('careinventory_needs', JSON.stringify(needs));
+  }, [needs]);
+
+  useEffect(() => {
+    localStorage.setItem('careinventory_logs', JSON.stringify(logs));
+  }, [logs]);
 
   // App Interface states
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
