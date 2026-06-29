@@ -1,0 +1,570 @@
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Baby, 
+  LayoutDashboard, 
+  Boxes, 
+  HeartHandshake, 
+  Camera, 
+  BarChart3, 
+  Bell, 
+  Settings, 
+  Plus, 
+  Menu, 
+  X, 
+  LogOut,
+  Sparkles,
+  Search,
+  CheckCircle2,
+  Lock
+} from 'lucide-react';
+
+import Login from './components/Login';
+import SupervisorDashboard from './components/SupervisorDashboard';
+import ScannerInterface from './components/ScannerInterface';
+import ImpactReports from './components/ImpactReports';
+
+import { INITIAL_DONATIONS, INITIAL_NEEDS, INITIAL_LOGS } from './data';
+import { DonationItem, ChildNeed, AuditLog, UserSession } from './types';
+
+export default function App() {
+  const [userSession, setUserSession] = useState<UserSession | null>(null);
+  const [activeScreen, setActiveScreen] = useState<'overview' | 'scanner' | 'reports'>('overview');
+  
+  // Databases States
+  const [donations, setDonations] = useState<DonationItem[]>(INITIAL_DONATIONS);
+  const [needs, setNeeds] = useState<ChildNeed[]>(INITIAL_NEEDS);
+  const [logs, setLogs] = useState<AuditLog[]>(INITIAL_LOGS);
+
+  // App Interface states
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [searchVal, setSearchVal] = useState('');
+  const [notifications, setNotifications] = useState<string[]>([
+    'Low stock warning: UHT Whole Milk',
+    'AI Scanner calibration completed',
+    'New vaccine batch verified'
+  ]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Handlers
+  const handleLogin = (session: UserSession) => {
+    setUserSession(session);
+    // Auto route depending on role
+    if (session.role === 'staff') {
+      setActiveScreen('scanner');
+    } else {
+      setActiveScreen('overview');
+    }
+  };
+
+  const handleLogout = () => {
+    setUserSession(null);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleAddDonation = (newItem: Omit<DonationItem, 'id'>) => {
+    const randomId = `#REG-${Math.floor(Math.random() * 9000) + 1000}`;
+    const addedItem: DonationItem = {
+      ...newItem,
+      id: randomId
+    };
+
+    setDonations(prev => [addedItem, ...prev]);
+
+    // Prepend a dynamic audit log
+    const timestamp = new Date().toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).replace(',', ' •');
+
+    const newLog: AuditLog = {
+      id: `LOG-${Date.now()}`,
+      timestamp,
+      event: `Donation Vault Addition: ${newItem.qty}x ${newItem.name}`,
+      entity: userSession ? userSession.name : 'System Core',
+      status: 'Verified',
+      verified: true
+    };
+
+    setLogs(prev => [newLog, ...prev]);
+
+    // Push real-time notification
+    setNotifications(prev => [
+      `Registered manual entry: ${newItem.qty}x ${newItem.name}`,
+      ...prev
+    ]);
+  };
+
+  const handleProcureNeed = (needId: string) => {
+    // Locate target need
+    const targetNeed = needs.find(n => n.id === needId);
+    if (!targetNeed) return;
+
+    // Simulate immediate procurement matching
+    setNeeds(prev => prev.map(n => {
+      if (n.id === needId) {
+        return {
+          ...n,
+          matchingStatus: 'Match Found',
+          statusDetails: `${n.quantity || 5} emergency kits allocated from logistics pipeline.`
+        };
+      }
+      return n;
+    }));
+
+    // Prepend log
+    const timestamp = new Date().toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).replace(',', ' •');
+
+    const newLog: AuditLog = {
+      id: `LOG-${Date.now()}`,
+      timestamp,
+      event: `Procured Emergency Need: ${targetNeed.title}`,
+      entity: 'Logistics Center',
+      status: 'Completed',
+      verified: true
+    };
+
+    setLogs(prev => [newLog, ...prev]);
+
+    // Push notification
+    setNotifications(prev => [
+      `Emergency Procured: ${targetNeed.title} fully synchronized.`,
+      ...prev
+    ]);
+  };
+
+  // Render Login if no active session
+  if (!userSession) {
+    return <Login onLoginSuccess={handleLogin} />;
+  }
+
+  // Filtered donations for the top-bar instant search
+  const searchedDonations = searchVal.trim() 
+    ? donations.filter(d => d.name.toLowerCase().includes(searchVal.toLowerCase()))
+    : [];
+
+  return (
+    <div className="min-h-screen bg-surface text-on-surface flex font-sans">
+      
+      {/* 1. LEFT SIDEBAR (Desktop Anchor) */}
+      <aside className="w-64 fixed inset-y-0 left-0 bg-surface border-r border-outline-variant/30 hidden md:flex flex-col py-6 z-40">
+        {/* Brand Header Logo */}
+        <div className="px-6 mb-8 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-on-primary shadow-inner">
+            <Baby className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-sm font-extrabold tracking-tight text-primary uppercase">CareInventory</h1>
+            <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Resource Management</p>
+          </div>
+        </div>
+
+        {/* Navigation links */}
+        <nav className="flex-1 px-4 space-y-1">
+          <button 
+            onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeScreen === 'overview' 
+                ? 'text-primary bg-primary-fixed/30 shadow-sm' 
+                : 'text-on-surface-variant hover:bg-surface-container'
+            }`}
+          >
+            <LayoutDashboard className="w-4 h-4" />
+            <span className="uppercase tracking-wider">Overview</span>
+          </button>
+
+          <button 
+            onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
+          >
+            <Boxes className="w-4 h-4 text-outline" />
+            <span className="uppercase tracking-wider">Donation Vault</span>
+          </button>
+
+          <button 
+            onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
+          >
+            <HeartHandshake className="w-4 h-4 text-outline" />
+            <span className="uppercase tracking-wider">Child Needs</span>
+          </button>
+
+          <button 
+            onClick={() => { setActiveScreen('scanner'); setIsMobileMenuOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeScreen === 'scanner' 
+                ? 'text-primary bg-primary-fixed/30 shadow-sm' 
+                : 'text-on-surface-variant hover:bg-surface-container'
+            }`}
+          >
+            <Camera className="w-4 h-4" />
+            <span className="uppercase tracking-wider">AI Scanner</span>
+          </button>
+
+          <button 
+            onClick={() => { setActiveScreen('reports'); setIsMobileMenuOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeScreen === 'reports' 
+                ? 'text-primary bg-primary-fixed/30 shadow-sm' 
+                : 'text-on-surface-variant hover:bg-surface-container'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span className="uppercase tracking-wider">Reports</span>
+          </button>
+        </nav>
+
+        {/* Current user session bottom container */}
+        <div className="px-4 mt-auto">
+          <div className="p-4 rounded-xl bg-surface-container border border-outline-variant/30 flex flex-col gap-3 shadow-inner">
+            <div className="flex items-center gap-3">
+              <img 
+                className="w-9 h-9 rounded-full object-cover border-2 border-primary-fixed" 
+                src={userSession.avatar} 
+                alt={userSession.name} 
+                referrerPolicy="no-referrer"
+              />
+              <div className="overflow-hidden">
+                <p className="text-xs font-bold text-on-surface truncate">{userSession.name}</p>
+                <p className="text-[10px] text-on-surface-variant font-semibold uppercase tracking-wider">{userSession.title}</p>
+              </div>
+            </div>
+            <button 
+              onClick={handleLogout}
+              className="w-full py-2 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:bg-white bg-red-50/50 rounded-lg transition-all border border-red-200/50 flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* 2. MAIN LAYOUT SHELL CONTAINER */}
+      <div className="flex-1 md:pl-64 flex flex-col min-w-0">
+        
+        {/* Top Navbar */}
+        <header className="h-16 bg-surface border-b border-outline-variant/30 px-4 md:px-8 flex justify-between items-center sticky top-0 z-30">
+          
+          {/* Mobile hamburger menu & branding */}
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant md:hidden cursor-pointer"
+            >
+              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+            <div className="flex items-center gap-1.5 md:hidden">
+              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-on-primary">
+                <Baby className="w-4 h-4 text-white" />
+              </div>
+              <h1 className="text-xs font-bold uppercase text-primary tracking-tight">CareInventory</h1>
+            </div>
+
+            {/* Desktop Navbar Search */}
+            <div className="relative hidden sm:block max-w-xs md:max-w-md w-60 md:w-80" id="top-search-bar">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-outline">
+                <Search className="w-4 h-4" />
+              </span>
+              <input 
+                type="text" 
+                placeholder="Instant search items..." 
+                value={searchVal}
+                onChange={(e) => setSearchVal(e.target.value)}
+                className="w-full pl-9 pr-4 py-1.5 bg-surface-container-low border border-outline-variant/50 rounded-xl text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+              />
+
+              {/* Instant Search Results Floating Dropdown */}
+              <AnimatePresence>
+                {searchVal && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute top-11 left-0 right-0 bg-white border border-outline-variant/30 rounded-xl shadow-lg z-50 p-2 text-xs"
+                  >
+                    <p className="text-[10px] font-bold text-on-surface-variant px-2.5 py-1 uppercase tracking-wider">Search Results</p>
+                    <div className="max-h-48 overflow-y-auto space-y-1 mt-1">
+                      {searchedDonations.length > 0 ? (
+                        searchedDonations.map(d => (
+                          <div 
+                            key={d.id} 
+                            onClick={() => {
+                              setSearchVal('');
+                              setActiveScreen('overview');
+                            }}
+                            className="p-2 hover:bg-surface-container rounded-lg cursor-pointer flex justify-between items-center"
+                          >
+                            <div>
+                              <p className="font-bold text-on-surface">{d.name}</p>
+                              <p className="text-[10px] text-on-surface-variant">{d.id} • {d.category}</p>
+                            </div>
+                            <span className="font-mono font-bold text-primary">{d.qty}x</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-center py-4 text-on-surface-variant font-medium">No inventory items matched.</p>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Right Action Widgets */}
+          <div className="flex items-center gap-3 relative">
+            
+            {/* Notification Trigger */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="p-2 text-on-surface-variant hover:bg-surface-container rounded-full transition-colors relative cursor-pointer"
+              >
+                <Bell className="w-5 h-5" />
+                {notifications.length > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full animate-pulse"></span>
+                )}
+              </button>
+
+              {/* Notifications Dropdown Panel */}
+              <AnimatePresence>
+                {showNotifications && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute right-0 top-11 w-72 bg-white border border-outline-variant/30 rounded-xl shadow-lg z-50 p-3 text-xs"
+                  >
+                    <div className="flex justify-between items-center pb-2 border-b border-outline-variant/20 mb-2">
+                      <p className="font-bold text-on-surface uppercase tracking-wider text-[10px]">Recent Alerts</p>
+                      <button 
+                        onClick={() => setNotifications([])}
+                        className="text-[9px] font-bold text-primary uppercase hover:underline"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-56 overflow-y-auto">
+                      {notifications.length > 0 ? (
+                        notifications.map((notif, i) => (
+                          <div key={i} className="flex gap-2 p-1.5 hover:bg-surface-container-low rounded-lg">
+                            <Sparkles className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+                            <p className="text-on-surface-variant leading-tight">{notif}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-center py-6 text-on-surface-variant font-medium">No unread notifications.</p>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <button 
+              onClick={() => alert('Calibration and setting panel loaded (Local environment: synchronized).')}
+              className="p-2 text-on-surface-variant hover:bg-surface-container rounded-full transition-colors cursor-pointer"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+
+            {/* Quick action button */}
+            <button 
+              onClick={() => {
+                setActiveScreen('overview');
+                // Use custom window alert helper or trigger the dashboard manual addition modal directly
+                alert('Add donation manual form triggered. You can insert records directly using the "Add Donation" module on the main dashboard Overview screen!');
+              }}
+              className="bg-primary hover:bg-primary-container text-on-primary px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 uppercase tracking-wider"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add Donation</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Mobile Sidebar overlay */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <div className="fixed inset-0 z-40 md:hidden flex">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              />
+              <motion.div 
+                initial={{ x: -280 }}
+                animate={{ x: 0 }}
+                exit={{ x: -280 }}
+                transition={{ type: 'spring', damping: 25 }}
+                className="relative w-64 bg-surface max-h-screen flex flex-col py-6"
+              >
+                <div className="px-6 mb-8 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-on-primary">
+                      <Baby className="w-4 h-4 text-white" />
+                    </div>
+                    <h1 className="text-xs font-bold text-primary uppercase">CareInventory</h1>
+                  </div>
+                  <button onClick={() => setIsMobileMenuOpen(false)} className="p-1 rounded-full hover:bg-surface-container cursor-pointer">
+                    <X className="w-4.5 h-4.5" />
+                  </button>
+                </div>
+
+                <nav className="flex-1 px-4 space-y-1">
+                  <button 
+                    onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      activeScreen === 'overview' 
+                        ? 'text-primary bg-primary-fixed/30' 
+                        : 'text-on-surface-variant hover:bg-surface-container'
+                    }`}
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    <span className="uppercase tracking-wider">Overview</span>
+                  </button>
+
+                  <button 
+                    onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
+                  >
+                    <Boxes className="w-4 h-4" />
+                    <span className="uppercase tracking-wider">Donation Vault</span>
+                  </button>
+
+                  <button 
+                    onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
+                  >
+                    <HeartHandshake className="w-4 h-4" />
+                    <span className="uppercase tracking-wider">Child Needs</span>
+                  </button>
+
+                  <button 
+                    onClick={() => { setActiveScreen('scanner'); setIsMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      activeScreen === 'scanner' 
+                        ? 'text-primary bg-primary-fixed/30' 
+                        : 'text-on-surface-variant hover:bg-surface-container'
+                    }`}
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span className="uppercase tracking-wider">AI Scanner</span>
+                  </button>
+
+                  <button 
+                    onClick={() => { setActiveScreen('reports'); setIsMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      activeScreen === 'reports' 
+                        ? 'text-primary bg-primary-fixed/30' 
+                        : 'text-on-surface-variant hover:bg-surface-container'
+                    }`}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    <span className="uppercase tracking-wider">Reports</span>
+                  </button>
+                </nav>
+
+                <div className="px-4 mt-auto">
+                  <div className="p-4 rounded-xl bg-surface-container border border-outline-variant/30 flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <img className="w-8 h-8 rounded-full object-cover" src={userSession.avatar} alt={userSession.name} referrerPolicy="no-referrer" />
+                      <div>
+                        <p className="text-xs font-bold text-on-surface">{userSession.name}</p>
+                        <p className="text-[10px] text-on-surface-variant font-semibold uppercase tracking-wider">{userSession.title}</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={handleLogout}
+                      className="w-full py-2 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:bg-white bg-red-50/50 rounded-lg border border-red-200/50 flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* 3. CORE ROUTER RENDER AREA */}
+        <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto overflow-y-auto">
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key={activeScreen}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+            >
+              {activeScreen === 'overview' && (
+                <SupervisorDashboard 
+                  donations={donations} 
+                  needs={needs} 
+                  onAddDonation={handleAddDonation}
+                  onProcureNeed={handleProcureNeed}
+                />
+              )}
+
+              {activeScreen === 'scanner' && (
+                <ScannerInterface onAddDonation={handleAddDonation} />
+              )}
+
+              {activeScreen === 'reports' && (
+                <ImpactReports 
+                  donations={donations} 
+                  needs={needs} 
+                  logs={logs} 
+                  userName={userSession.name} 
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+
+        {/* Common status bar footer */}
+        <footer className="bg-surface-container-low/50 border-t border-outline-variant/20 p-4 md:px-8 flex flex-col sm:flex-row justify-between items-center text-xs gap-3">
+          <div className="flex items-center gap-3">
+            <div className="relative w-2.5 h-2.5">
+              <span className="absolute inset-0 bg-secondary rounded-full animate-ping opacity-75"></span>
+              <span className="relative block w-2.5 h-2.5 bg-secondary rounded-full"></span>
+            </div>
+            <p className="text-on-surface-variant font-medium">
+              AI Logistics Engine: <span className="text-secondary font-bold">Synchronized</span>
+            </p>
+          </div>
+          <div className="flex gap-6 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant text-center sm:text-right">
+            <div>
+              <span className="opacity-70 block text-[9px]">Cloud Health</span>
+              <span className="font-mono text-xs text-on-surface">99.9%</span>
+            </div>
+            <div className="border-l border-outline-variant/30 pl-6">
+              <span className="opacity-70 block text-[9px]">API Latency</span>
+              <span className="font-mono text-xs text-on-surface">24ms</span>
+            </div>
+            <div className="border-l border-outline-variant/30 pl-6">
+              <span className="opacity-70 block text-[9px]">Matching Accuracy</span>
+              <span className="font-mono text-xs text-on-surface">97.4%</span>
+            </div>
+          </div>
+        </footer>
+
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,6 @@
+{
+  "name": "CareInventory AI",
+  "description": "An AI-assisted child-care resource management system designed for operational precision and compassionate aid distribution.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
