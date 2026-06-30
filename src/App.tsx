@@ -23,6 +23,7 @@ import Login from './components/Login';
 import SupervisorDashboard from './components/SupervisorDashboard';
 import ScannerInterface from './components/ScannerInterface';
 import ImpactReports from './components/ImpactReports';
+import DonorDashboard from './components/DonorDashboard';
 
 import { INITIAL_DONATIONS, INITIAL_NEEDS, INITIAL_LOGS } from './data';
 import { DonationItem, ChildNeed, AuditLog, UserSession } from './types';
@@ -115,6 +116,57 @@ export default function App() {
   const handleLogout = () => {
     setUserSession(null);
     setIsMobileMenuOpen(false);
+  };
+
+  const handleUpdateTrackingStatus = async (itemId: string, newStatus: 'Pending' | 'Received' | 'Sorted' | 'Dispatched') => {
+    let updatedItem: DonationItem | undefined;
+
+    setDonations(prev => prev.map(item => {
+      if (item.id === itemId) {
+        updatedItem = {
+          ...item,
+          trackingStatus: newStatus
+        };
+        return updatedItem;
+      }
+      return item;
+    }));
+
+    const timestamp = new Date().toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).replace(',', ' •');
+
+    const newLog: AuditLog = {
+      id: `LOG-${Date.now()}`,
+      timestamp,
+      event: `Donation Status Update: [${itemId}] changed to ${newStatus}`,
+      entity: userSession ? userSession.name : 'System Core',
+      status: 'Verified',
+      verified: true
+    };
+
+    setLogs(prev => [newLog, ...prev]);
+
+    setNotifications(prev => [
+      `Donation [${itemId}] status updated to ${newStatus}`,
+      ...prev
+    ]);
+
+    if (updatedItem) {
+      try {
+        await Promise.all([
+          saveDonationItem(updatedItem),
+          saveAuditLog(newLog)
+        ]);
+      } catch (err) {
+        console.error("Firestore persistence error:", err);
+      }
+    }
   };
 
   const handleAddDonation = async (newItem: Omit<DonationItem, 'id'>) => {
@@ -258,48 +310,56 @@ export default function App() {
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
-            <span className="uppercase tracking-wider">Overview</span>
+            <span className="uppercase tracking-wider">
+              {userSession.role === 'donor' ? 'Donor Portal' : 'Overview'}
+            </span>
           </button>
 
-          <button 
-            onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
-          >
-            <Boxes className="w-4 h-4 text-outline" />
-            <span className="uppercase tracking-wider">Donation Vault</span>
-          </button>
+          {userSession.role !== 'donor' && (
+            <>
+              <button 
+                onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
+              >
+                <Boxes className="w-4 h-4 text-outline" />
+                <span className="uppercase tracking-wider">Donation Vault</span>
+              </button>
 
-          <button 
-            onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
-          >
-            <HeartHandshake className="w-4 h-4 text-outline" />
-            <span className="uppercase tracking-wider">Child Needs</span>
-          </button>
+              <button 
+                onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
+              >
+                <HeartHandshake className="w-4 h-4 text-outline" />
+                <span className="uppercase tracking-wider">Child Needs</span>
+              </button>
 
-          <button 
-            onClick={() => { setActiveScreen('scanner'); setIsMobileMenuOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeScreen === 'scanner' 
-                ? 'text-primary bg-primary-fixed/30 shadow-sm' 
-                : 'text-on-surface-variant hover:bg-surface-container'
-            }`}
-          >
-            <Camera className="w-4 h-4" />
-            <span className="uppercase tracking-wider">AI Scanner</span>
-          </button>
+              <button 
+                onClick={() => { setActiveScreen('scanner'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeScreen === 'scanner' 
+                    ? 'text-primary bg-primary-fixed/30 shadow-sm' 
+                    : 'text-on-surface-variant hover:bg-surface-container'
+                }`}
+              >
+                <Camera className="w-4 h-4" />
+                <span className="uppercase tracking-wider">AI Scanner</span>
+              </button>
+            </>
+          )}
 
-          <button 
-            onClick={() => { setActiveScreen('reports'); setIsMobileMenuOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeScreen === 'reports' 
-                ? 'text-primary bg-primary-fixed/30 shadow-sm' 
-                : 'text-on-surface-variant hover:bg-surface-container'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span className="uppercase tracking-wider">Reports</span>
-          </button>
+          {userSession.role === 'supervisor' && (
+            <button 
+              onClick={() => { setActiveScreen('reports'); setIsMobileMenuOpen(false); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeScreen === 'reports' 
+                  ? 'text-primary bg-primary-fixed/30 shadow-sm' 
+                  : 'text-on-surface-variant hover:bg-surface-container'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span className="uppercase tracking-wider">Reports</span>
+            </button>
+          )}
         </nav>
 
         {/* Current user session bottom container */}
@@ -512,48 +572,56 @@ export default function App() {
                     }`}
                   >
                     <LayoutDashboard className="w-4 h-4" />
-                    <span className="uppercase tracking-wider">Overview</span>
+                    <span className="uppercase tracking-wider">
+                      {userSession.role === 'donor' ? 'Donor Portal' : 'Overview'}
+                    </span>
                   </button>
 
-                  <button 
-                    onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
-                  >
-                    <Boxes className="w-4 h-4" />
-                    <span className="uppercase tracking-wider">Donation Vault</span>
-                  </button>
+                  {userSession.role !== 'donor' && (
+                    <>
+                      <button 
+                        onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
+                      >
+                        <Boxes className="w-4 h-4" />
+                        <span className="uppercase tracking-wider">Donation Vault</span>
+                      </button>
 
-                  <button 
-                    onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
-                  >
-                    <HeartHandshake className="w-4 h-4" />
-                    <span className="uppercase tracking-wider">Child Needs</span>
-                  </button>
+                      <button 
+                        onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
+                      >
+                        <HeartHandshake className="w-4 h-4" />
+                        <span className="uppercase tracking-wider">Child Needs</span>
+                      </button>
 
-                  <button 
-                    onClick={() => { setActiveScreen('scanner'); setIsMobileMenuOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      activeScreen === 'scanner' 
-                        ? 'text-primary bg-primary-fixed/30' 
-                        : 'text-on-surface-variant hover:bg-surface-container'
-                    }`}
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span className="uppercase tracking-wider">AI Scanner</span>
-                  </button>
+                      <button 
+                        onClick={() => { setActiveScreen('scanner'); setIsMobileMenuOpen(false); }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          activeScreen === 'scanner' 
+                            ? 'text-primary bg-primary-fixed/30' 
+                            : 'text-on-surface-variant hover:bg-surface-container'
+                        }`}
+                      >
+                        <Camera className="w-4 h-4" />
+                        <span className="uppercase tracking-wider">AI Scanner</span>
+                      </button>
+                    </>
+                  )}
 
-                  <button 
-                    onClick={() => { setActiveScreen('reports'); setIsMobileMenuOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      activeScreen === 'reports' 
-                        ? 'text-primary bg-primary-fixed/30' 
-                        : 'text-on-surface-variant hover:bg-surface-container'
-                    }`}
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    <span className="uppercase tracking-wider">Reports</span>
-                  </button>
+                  {userSession.role === 'supervisor' && (
+                    <button 
+                      onClick={() => { setActiveScreen('reports'); setIsMobileMenuOpen(false); }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        activeScreen === 'reports' 
+                          ? 'text-primary bg-primary-fixed/30' 
+                          : 'text-on-surface-variant hover:bg-surface-container'
+                      }`}
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                      <span className="uppercase tracking-wider">Reports</span>
+                    </button>
+                  )}
                 </nav>
 
                 <div className="px-4 mt-auto">
@@ -590,25 +658,55 @@ export default function App() {
               transition={{ duration: 0.25, ease: 'easeInOut' }}
             >
               {activeScreen === 'overview' && (
-                <SupervisorDashboard 
-                  donations={donations} 
-                  needs={needs} 
-                  onAddDonation={handleAddDonation}
-                  onProcureNeed={handleProcureNeed}
-                />
+                userSession.role === 'donor' ? (
+                  <DonorDashboard 
+                    needs={needs}
+                    donations={donations}
+                    onAddDonation={handleAddDonation}
+                    userSession={userSession}
+                  />
+                ) : (
+                  <SupervisorDashboard 
+                    donations={donations} 
+                    needs={needs} 
+                    onAddDonation={handleAddDonation}
+                    onProcureNeed={handleProcureNeed}
+                    onUpdateTrackingStatus={handleUpdateTrackingStatus}
+                  />
+                )
               )}
 
               {activeScreen === 'scanner' && (
-                <ScannerInterface onAddDonation={handleAddDonation} />
+                userSession.role === 'donor' ? (
+                  <div className="flex flex-col items-center justify-center py-20 bg-white border border-outline-variant/30 rounded-xl shadow-sm text-center px-4">
+                    <Lock className="w-12 h-12 text-error mb-4 animate-bounce" />
+                    <h3 className="text-sm font-bold text-on-surface uppercase tracking-wider">Access Denied</h3>
+                    <p className="text-xs text-on-surface-variant text-center mt-2 max-w-xs leading-relaxed">
+                      You are logged in as a Donor. Only verified staff members can access the AI Scanner interface.
+                    </p>
+                  </div>
+                ) : (
+                  <ScannerInterface onAddDonation={handleAddDonation} />
+                )
               )}
 
               {activeScreen === 'reports' && (
-                <ImpactReports 
-                  donations={donations} 
-                  needs={needs} 
-                  logs={logs} 
-                  userName={userSession.name} 
-                />
+                userSession.role !== 'supervisor' ? (
+                  <div className="flex flex-col items-center justify-center py-20 bg-white border border-outline-variant/30 rounded-xl shadow-sm text-center px-4">
+                    <Lock className="w-12 h-12 text-error mb-4 animate-bounce" />
+                    <h3 className="text-sm font-bold text-on-surface uppercase tracking-wider">Access Denied</h3>
+                    <p className="text-xs text-on-surface-variant text-center mt-2 max-w-xs leading-relaxed">
+                      You are logged in as a {userSession.role}. Only administrators and supervisors can access the Impact Reports and logs dashboard.
+                    </p>
+                  </div>
+                ) : (
+                  <ImpactReports 
+                    donations={donations} 
+                    needs={needs} 
+                    logs={logs} 
+                    userName={userSession.name} 
+                  />
+                )
               )}
             </motion.div>
           </AnimatePresence>

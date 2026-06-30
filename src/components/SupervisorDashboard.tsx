@@ -23,13 +23,15 @@ interface SupervisorDashboardProps {
   needs: ChildNeed[];
   onAddDonation: (item: Omit<DonationItem, 'id'>) => void;
   onProcureNeed: (id: string) => void;
+  onUpdateTrackingStatus?: (id: string, status: 'Pending' | 'Received' | 'Sorted' | 'Dispatched') => void;
 }
 
 export default function SupervisorDashboard({ 
   donations, 
   needs, 
   onAddDonation, 
-  onProcureNeed 
+  onProcureNeed,
+  onUpdateTrackingStatus
 }: SupervisorDashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
@@ -239,8 +241,8 @@ export default function SupervisorDashboard({
                   <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/30">Item Name</th>
                   <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/30">Category</th>
                   <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/30 text-center">Qty</th>
-                  <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/30">Expiry</th>
-                  <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/30">Status</th>
+                  <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/30">Expiry / Condition</th>
+                  <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/30">Tracking Status</th>
                   <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/30 w-10"></th>
                 </tr>
               </thead>
@@ -252,6 +254,9 @@ export default function SupervisorDashboard({
                         <div className="flex flex-col">
                           <span className="text-xs font-semibold text-on-surface">{item.name}</span>
                           <span className="text-[10px] text-on-surface-variant font-mono mt-0.5">{item.id}</span>
+                          {item.donorName && (
+                            <span className="text-[9px] text-primary font-bold uppercase tracking-wider mt-0.5">Donor: {item.donorName}</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-5 py-3">
@@ -270,26 +275,48 @@ export default function SupervisorDashboard({
                         <span className={item.status === 'Critical' ? 'text-error font-semibold' : ''}>
                           {item.expiry}
                         </span>
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded-full ${
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className={`w-1.5 h-1.5 rounded-full ${
                             item.status === 'Optimal' 
                               ? 'bg-secondary' 
                               : item.status === 'Critical' 
                                 ? 'bg-error animate-pulse' 
                                 : 'bg-tertiary'
                           }`}></span>
-                          <span className={`text-[11px] font-semibold ${
+                          <span className={`text-[10px] font-bold ${
                             item.status === 'Optimal' 
                               ? 'text-secondary' 
                               : item.status === 'Critical' 
-                                ? 'text-error' 
+                                ? 'text-error animate-pulse' 
                                 : 'text-tertiary'
                           }`}>
                             {item.status}
                           </span>
                         </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <select
+                          value={item.trackingStatus || 'Pending'}
+                          onChange={(e) => {
+                            if (onUpdateTrackingStatus) {
+                              onUpdateTrackingStatus(item.id, e.target.value as any);
+                            }
+                          }}
+                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border outline-none bg-white cursor-pointer transition-all hover:bg-surface-container-low ${
+                            item.trackingStatus === 'Dispatched' 
+                              ? 'border-emerald-200 text-emerald-700 bg-emerald-50/50' 
+                              : item.trackingStatus === 'Sorted' 
+                                ? 'border-blue-200 text-blue-700 bg-blue-50/50'
+                                : item.trackingStatus === 'Received' 
+                                  ? 'border-purple-200 text-purple-700 bg-purple-50/50'
+                                  : 'border-amber-200 text-amber-700 bg-amber-50/50'
+                          }`}
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Received">Received</option>
+                          <option value="Sorted">Sorted</option>
+                          <option value="Dispatched">Dispatched</option>
+                        </select>
                       </td>
                       <td className="px-5 py-3 text-right relative">
                         <button 

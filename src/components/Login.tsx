@@ -23,23 +23,44 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [password, setPassword] = useState('password123');
   const [rememberMe, setRememberMe] = useState(true);
 
+  // Auto-fill credentials depending on selected role
+  React.useEffect(() => {
+    if (role === 'supervisor') {
+      setEmail('manager@ngo.org');
+    } else if (role === 'staff') {
+      setEmail('field.staff@ngo.org');
+    } else {
+      setEmail('donor@care.org');
+    }
+  }, [role]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     // Set user details depending on selected role
-    const session: UserSession = role === 'supervisor' 
-      ? {
-          name: 'Sarah Jenkins',
-          role: 'supervisor',
-          title: 'Inventory Lead',
-          avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDHkzZKNH2tP5f7-2AnyIjzV7HfdqStZHIimCMF1mjAVu9oaGSBEHVH3oWCv7nR2eASJpk6PF9Msa_mxxB3ZP-PcjCMxF-23_pIHkxym-xhZM3mskCNyfklBkFUXimeH2o0Ypjyfhed1VfRyD__-EvV9O2JeAeYwnrtyV7vI40_nZJGCi8RxRW2KAFdhZ-vt_HsSmRsxYoaECmtIerSsau8v8J5PeqtwxLqfho1Ith5-6uXwkeYS55rHatUT7uaeHgJ_qZpeyMrg_Jo'
-        }
-      : {
-          name: 'Sarah Mitchell',
-          role: 'staff',
-          title: 'Field Manager',
-          avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAHY3xmdKvR7x4vWRwU2kvi9D9meFjUDlkniKMKq7Vf4-HNrMkzOKRY68gH986QIzcxLvYh5VfmSTPZ1v80pfR8JjzwpMhS8hE22oFRPSaoZiIVluVNfd_off3AYrwAiZ7wUP4T5l6jdVhHI1hBYw4OP1Cv6tk1gtJcACa4yKUqDB-ZEJZ01emjUc6bEfB_coGOV-M-RCrSz3IIJL49klJtAjku3jxYFF2M3cw_YqDipl5oS-DObMT9jwVThToydgdeps_q6E_Xim8_'
-        };
+    let session: UserSession;
+    if (role === 'supervisor') {
+      session = {
+        name: 'Sarah Jenkins',
+        role: 'supervisor',
+        title: 'Inventory Lead',
+        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDHkzZKNH2tP5f7-2AnyIjzV7HfdqStZHIimCMF1mjAVu9oaGSBEHVH3oWCv7nR2eASJpk6PF9Msa_mxxB3ZP-PcjCMxF-23_pIHkxym-xhZM3mskCNyfklBkFUXimeH2o0Ypjyfhed1VfRyD__-EvV9O2JeAeYwnrtyV7vI40_nZJGCi8RxRW2KAFdhZ-vt_HsSmRsxYoaECmtIerSsau8v8J5PeqtwxLqfho1Ith5-6uXwkeYS55rHatUT7uaeHgJ_qZpeyMrg_Jo'
+      };
+    } else if (role === 'staff') {
+      session = {
+        name: 'Sarah Mitchell',
+        role: 'staff',
+        title: 'Field Manager',
+        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAHY3xmdKvR7x4vWRwU2kvi9D9meFjUDlkniKMKq7Vf4-HNrMkzOKRY68gH986QIzcxLvYh5VfmSTPZ1v80pfR8JjzwpMhS8hE22oFRPSaoZiIVluVNfd_off3AYrwAiZ7wUP4T5l6jdVhHI1hBYw4OP1Cv6tk1gtJcACa4yKUqDB-ZEJZ01emjUc6bEfB_coGOV-M-RCrSz3IIJL49klJtAjku3jxYFF2M3cw_YqDipl5oS-DObMT9jwVThToydgdeps_q6E_Xim8_'
+      };
+    } else {
+      session = {
+        name: 'Alexander Reed',
+        role: 'donor',
+        title: 'Community Donor',
+        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBClIYQ5HryYAOBT_L-Pr5ljQqT2p_F3XtgVb6g_r-ddSRGsVEyLtmxnpqCvVwHs0j_ubZrxKQgRL6R6lB4oFJmOdvf7KZ845Wd_NtvPY_EI_MPgd_n52TuaQ3TFQkgTWf9QjGWBarmgN39M83jj8VSjtLtVEyc4_JZzEZZOEqQL2hitCqAc0ykLgAG0yjuZAcRg6RtAaMyrfACaB-EM7g6074NZDdF31m20hFKejK797zX7pgeHH76v0WghI1qR38czH_AxiRIDevk'
+      };
+    }
 
     onLoginSuccess(session);
   };
@@ -149,33 +170,47 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               {/* Role Selection */}
               <div className="space-y-2">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">I am a...</label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-2">
                   {/* Supervisor Card */}
                   <div 
                     id="role-supervisor"
                     onClick={() => setRole('supervisor')}
-                    className={`p-3 border rounded-xl flex flex-col items-center gap-1.5 cursor-pointer transition-all ${
+                    className={`p-2.5 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${
                       role === 'supervisor' 
                         ? 'border-primary bg-primary-fixed/20 shadow-sm' 
                         : 'border-outline-variant bg-surface-container-low hover:border-primary/50'
                     }`}
                   >
-                    <UserCheck className={`w-5 h-5 ${role === 'supervisor' ? 'text-primary' : 'text-on-surface-variant'}`} />
-                    <span className="text-[10px] font-bold text-center uppercase tracking-wider">Inventory Supervisor</span>
+                    <UserCheck className={`w-4 h-4 ${role === 'supervisor' ? 'text-primary' : 'text-on-surface-variant'}`} />
+                    <span className="text-[9px] font-bold text-center uppercase tracking-wider leading-tight">Supervisor</span>
                   </div>
                   
                   {/* Staff Card */}
                   <div 
                     id="role-staff"
                     onClick={() => setRole('staff')}
-                    className={`p-3 border rounded-xl flex flex-col items-center gap-1.5 cursor-pointer transition-all ${
+                    className={`p-2.5 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${
                       role === 'staff' 
                         ? 'border-primary bg-primary-fixed/20 shadow-sm' 
                         : 'border-outline-variant bg-surface-container-low hover:border-primary/50'
                     }`}
                   >
-                    <User className={`w-5 h-5 ${role === 'staff' ? 'text-primary' : 'text-on-surface-variant'}`} />
-                    <span className="text-[10px] font-bold text-center uppercase tracking-wider">Staff Member</span>
+                    <User className={`w-4 h-4 ${role === 'staff' ? 'text-primary' : 'text-on-surface-variant'}`} />
+                    <span className="text-[9px] font-bold text-center uppercase tracking-wider leading-tight">Staff</span>
+                  </div>
+
+                  {/* Donor Card */}
+                  <div 
+                    id="role-donor"
+                    onClick={() => setRole('donor')}
+                    className={`p-2.5 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${
+                      role === 'donor' 
+                        ? 'border-primary bg-primary-fixed/20 shadow-sm' 
+                        : 'border-outline-variant bg-surface-container-low hover:border-primary/50'
+                    }`}
+                  >
+                    <Heart className={`w-4 h-4 ${role === 'donor' ? 'text-primary' : 'text-on-surface-variant'}`} />
+                    <span className="text-[9px] font-bold text-center uppercase tracking-wider leading-tight">Donor / Public</span>
                   </div>
                 </div>
               </div>
@@ -197,7 +232,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       type="email" 
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder={role === 'supervisor' ? 'manager@ngo.org' : 'field.staff@ngo.org'} 
+                      placeholder={
+                        role === 'supervisor' 
+                          ? 'manager@ngo.org' 
+                          : role === 'staff' 
+                            ? 'field.staff@ngo.org' 
+                            : 'donor@care.org'
+                      } 
                       required
                     />
                   </div>

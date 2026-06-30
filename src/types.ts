@@ -1,4 +1,4 @@
-export type Role = 'supervisor' | 'staff';
+export type Role = 'supervisor' | 'staff' | 'donor';
 
 export interface UserSession {
   name: string;
@@ -15,6 +15,8 @@ export interface DonationItem {
   unit: string;
   expiry: string;
   status: 'Optimal' | 'Critical' | 'Stock Low';
+  trackingStatus?: 'Pending' | 'Received' | 'Sorted' | 'Dispatched';
+  donorName?: string;
 }
 
 export interface ChildNeed {
