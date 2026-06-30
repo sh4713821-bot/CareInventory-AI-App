@@ -11,7 +11,7 @@ import {
   limit
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { DonationItem, ChildNeed, AuditLog, Role } from "./types";
+import { DonationItem, ChildNeed, AuditLog, Role, InventoryStockItem } from "./types";
 import { INITIAL_DONATIONS, INITIAL_NEEDS, INITIAL_LOGS } from "./data";
 
 // Collection Names
@@ -19,6 +19,75 @@ const DONATIONS_COL = "donations";
 const NEEDS_COL = "needs";
 const LOGS_COL = "logs";
 const USERS_COL = "users";
+const STOCK_COL = "inventory_stock";
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {},
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+export const INITIAL_STOCK: InventoryStockItem[] = [
+  {
+    id: 'thermal-blankets-winter-jackets-pack',
+    name: 'Thermal Blankets & Winter Jackets Pack',
+    category: 'Clothing',
+    qty: 15,
+    unit: 'Packs'
+  },
+  {
+    id: 'baby-formula-stage-1',
+    name: 'Baby Formula (Stage 1)',
+    category: 'Medical & Nutrition',
+    qty: 240,
+    unit: 'Units'
+  },
+  {
+    id: 'uht-whole-milk-1l',
+    name: 'UHT Whole Milk (1L)',
+    category: 'Food',
+    qty: 48,
+    unit: 'Units'
+  },
+  {
+    id: 'hygiene-kits-type-a',
+    name: 'Hygiene Kits (Type A)',
+    category: 'Hygiene',
+    qty: 156,
+    unit: 'Units'
+  },
+  {
+    id: 'rice-5kg-sacks',
+    name: 'Rice (5kg Sacks)',
+    category: 'Food',
+    qty: 85,
+    unit: 'Units'
+  }
+];
 
 export interface DatabaseUser {
   email: string;
@@ -98,10 +167,45 @@ export async function seedDatabaseIfEmpty() {
         await setDoc(doc(db, LOGS_COL, log.id), log);
       }
     }
+
+    // Check Inventory Stock
+    const stockSnapshot = await getDocs(collection(db, STOCK_COL));
+    if (stockSnapshot.empty) {
+      console.log("Seeding initial inventory stock into Firestore...");
+      for (const stockItem of INITIAL_STOCK) {
+        await setDoc(doc(db, STOCK_COL, stockItem.id), stockItem);
+      }
+    }
   } catch (error) {
     console.error("Error during Firestore seeding:", error);
   }
 }
+
+// Fetch all inventory stock from Firestore
+export async function fetchInventoryStock(): Promise<InventoryStockItem[]> {
+  try {
+    await seedDatabaseIfEmpty();
+    const snapshot = await getDocs(collection(db, STOCK_COL));
+    const items: InventoryStockItem[] = [];
+    snapshot.forEach((doc) => {
+      items.push(doc.data() as InventoryStockItem);
+    });
+    return items;
+  } catch (error) {
+    console.error("Error fetching inventory stock from Firestore, falling back to local:", error);
+    return INITIAL_STOCK;
+  }
+}
+
+// Save or Update an inventory stock item in Firestore
+export async function saveInventoryStockItem(item: InventoryStockItem): Promise<void> {
+  try {
+    await setDoc(doc(db, STOCK_COL, item.id), item);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `${STOCK_COL}/${item.id}`);
+  }
+}
+
 
 // Fetch all donations from Firestore
 export async function fetchDonations(): Promise<DonationItem[]> {

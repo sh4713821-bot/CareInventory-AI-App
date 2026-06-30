@@ -39,3 +39,11 @@ export interface AuditLog {
   status: 'Completed' | 'In Transit' | 'Verified';
   verified: boolean;
 }
+
+export interface InventoryStockItem {
+  id: string;
+  name: string;
+  category: 'Medical & Nutrition' | 'Food' | 'Hygiene' | 'Clothing' | 'Educational';
+  qty: number;
+  unit: string;
+}

@@ -26,14 +26,17 @@ import ImpactReports from './components/ImpactReports';
 import DonorDashboard from './components/DonorDashboard';
 
 import { INITIAL_DONATIONS, INITIAL_NEEDS, INITIAL_LOGS } from './data';
-import { DonationItem, ChildNeed, AuditLog, UserSession } from './types';
+import { DonationItem, ChildNeed, AuditLog, UserSession, InventoryStockItem } from './types';
 import { 
   fetchDonations, 
   fetchNeeds, 
   fetchLogs, 
   saveDonationItem, 
   saveNeedItem, 
-  saveAuditLog 
+  saveAuditLog,
+  fetchInventoryStock,
+  saveInventoryStockItem,
+  INITIAL_STOCK
 } from './firebaseService';
 
 export default function App() {
@@ -53,6 +56,10 @@ export default function App() {
     const saved = localStorage.getItem('careinventory_logs');
     return saved ? JSON.parse(saved) : INITIAL_LOGS;
   });
+  const [inventoryStock, setInventoryStock] = useState<InventoryStockItem[]>(() => {
+    const saved = localStorage.getItem('careinventory_stock');
+    return saved ? JSON.parse(saved) : INITIAL_STOCK;
+  });
 
   const [isLoadingLive, setIsLoadingLive] = useState(true);
 
@@ -61,15 +68,17 @@ export default function App() {
     async function loadLiveData() {
       try {
         setIsLoadingLive(true);
-        const [liveDonations, liveNeeds, liveLogs] = await Promise.all([
+        const [liveDonations, liveNeeds, liveLogs, liveStock] = await Promise.all([
           fetchDonations(),
           fetchNeeds(),
-          fetchLogs()
+          fetchLogs(),
+          fetchInventoryStock()
         ]);
         
         if (liveDonations && liveDonations.length > 0) setDonations(liveDonations);
         if (liveNeeds && liveNeeds.length > 0) setNeeds(liveNeeds);
         if (liveLogs && liveLogs.length > 0) setLogs(liveLogs);
+        if (liveStock && liveStock.length > 0) setInventoryStock(liveStock);
       } catch (err) {
         console.error("Failed to load data from Firebase, falling back to local storage:", err);
       } finally {
@@ -91,6 +100,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('careinventory_logs', JSON.stringify(logs));
   }, [logs]);
+
+  useEffect(() => {
+    localStorage.setItem('careinventory_stock', JSON.stringify(inventoryStock));
+  }, [inventoryStock]);
 
   // App Interface states
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -121,6 +134,10 @@ export default function App() {
 
   const handleUpdateTrackingStatus = async (itemId: string, newStatus: 'Pending' | 'Received' | 'Sorted' | 'Dispatched') => {
     let updatedItem: DonationItem | undefined;
+
+    const originalItem = donations.find(d => d.id === itemId);
+    const wasPending = originalItem && (originalItem.trackingStatus === 'Pending' || !originalItem.trackingStatus);
+    const isNowReceived = newStatus === 'Received';
 
     setDonations(prev => prev.map(item => {
       if (item.id === itemId) {
@@ -157,6 +174,43 @@ export default function App() {
       `Donation [${itemId}] status updated to ${newStatus}`,
       ...prev
     ]);
+
+    // PIPELINE AUTOTRIGGER: When status is changed from Pending to Received
+    if (wasPending && isNowReceived && originalItem) {
+      const stockId = originalItem.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '-');
+      const existingStock = inventoryStock.find(s => s.id === stockId);
+      let updatedStockItem: InventoryStockItem;
+
+      if (existingStock) {
+        updatedStockItem = {
+          ...existingStock,
+          qty: existingStock.qty + originalItem.qty
+        };
+      } else {
+        updatedStockItem = {
+          id: stockId,
+          name: originalItem.name,
+          category: originalItem.category,
+          qty: originalItem.qty,
+          unit: originalItem.unit
+        };
+      }
+
+      setInventoryStock(prev => {
+        const found = prev.some(s => s.id === stockId);
+        if (found) {
+          return prev.map(s => s.id === stockId ? updatedStockItem : s);
+        } else {
+          return [updatedStockItem, ...prev];
+        }
+      });
+
+      try {
+        await saveInventoryStockItem(updatedStockItem);
+      } catch (err) {
+        console.error("Failed to automatically update physical stock on status change:", err);
+      }
+    }
 
     if (updatedItem) {
       try {
@@ -206,6 +260,43 @@ export default function App() {
       ...prev
     ]);
 
+    // PIPELINE AUTOTRIGGER: If newly added donation is already Received
+    if (addedItem.trackingStatus === 'Received') {
+      const stockId = addedItem.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '-');
+      const existingStock = inventoryStock.find(s => s.id === stockId);
+      let updatedStockItem: InventoryStockItem;
+
+      if (existingStock) {
+        updatedStockItem = {
+          ...existingStock,
+          qty: existingStock.qty + addedItem.qty
+        };
+      } else {
+        updatedStockItem = {
+          id: stockId,
+          name: addedItem.name,
+          category: addedItem.category,
+          qty: addedItem.qty,
+          unit: addedItem.unit
+        };
+      }
+
+      setInventoryStock(prev => {
+        const found = prev.some(s => s.id === stockId);
+        if (found) {
+          return prev.map(s => s.id === stockId ? updatedStockItem : s);
+        } else {
+          return [updatedStockItem, ...prev];
+        }
+      });
+
+      try {
+        await saveInventoryStockItem(updatedStockItem);
+      } catch (err) {
+        console.error("Failed to automatically update physical stock on manual add:", err);
+      }
+    }
+
     // Async write to live Firestore DB
     try {
       await Promise.all([
@@ -214,6 +305,55 @@ export default function App() {
       ]);
     } catch (err) {
       console.error("Firestore persistence error:", err);
+    }
+  };
+
+  const handleUpdateInventoryStockQty = async (stockId: string, newQty: number) => {
+    let updatedStockItem: InventoryStockItem | undefined;
+
+    setInventoryStock(prev => prev.map(item => {
+      if (item.id === stockId) {
+        updatedStockItem = {
+          ...item,
+          qty: Math.max(0, newQty)
+        };
+        return updatedStockItem;
+      }
+      return item;
+    }));
+
+    if (updatedStockItem) {
+      try {
+        await saveInventoryStockItem(updatedStockItem);
+
+        const timestamp = new Date().toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).replace(',', ' •');
+
+        const newLog: AuditLog = {
+          id: `LOG-${Date.now()}`,
+          timestamp,
+          event: `Inventory Stock Correction: [${updatedStockItem.name}] adjusted to ${updatedStockItem.qty} ${updatedStockItem.unit}`,
+          entity: userSession ? userSession.name : 'System Core',
+          status: 'Verified',
+          verified: true
+        };
+
+        setLogs(prev => [newLog, ...prev]);
+        await saveAuditLog(newLog);
+
+        setNotifications(prev => [
+          `Stock updated: [${updatedStockItem!.name}] level set to ${updatedStockItem!.qty}`,
+          ...prev
+        ]);
+      } catch (err) {
+        console.error("Firestore persistence error for stock update:", err);
+      }
     }
   };
 
@@ -785,6 +925,9 @@ export default function App() {
                   <SupervisorDashboard 
                     donations={donations} 
                     needs={needs} 
+                    inventoryStock={inventoryStock}
+                    userRole={userSession.role}
+                    onUpdateInventoryStockQty={handleUpdateInventoryStockQty}
                     onAddDonation={handleAddDonation}
                     onProcureNeed={handleProcureNeed}
                     onUpdateTrackingStatus={handleUpdateTrackingStatus}

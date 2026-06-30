@@ -60,6 +60,19 @@
         "verified": { "type": "boolean" }
       },
       "required": ["id", "timestamp", "event", "entity", "status", "verified"]
+    },
+    "inventory_stock": {
+      "title": "inventory_stock",
+      "description": "Consolidated physical warehouse stock counts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string", "enum": ["Medical & Nutrition", "Food", "Hygiene", "Clothing", "Educational"] },
+        "qty": { "type": "number" },
+        "unit": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "qty", "unit"]
     }
   },
   "firestore": {
@@ -70,6 +83,10 @@
     "donations/{donationId}": {
       "schema": "donations",
       "description": "Live resource inventory items and tracking"
+    },
+    "inventory_stock/{stockId}": {
+      "schema": "inventory_stock",
+      "description": "Physical warehouse item stock counts"
     },
     "needs/{needId}": {
       "schema": "needs",
