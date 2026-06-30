@@ -511,7 +511,7 @@ export default function App() {
             </div>
 
             <button 
-              onClick={() => alert('Calibration and setting panel loaded (Local environment: synchronized).')}
+              onClick={() => console.log('Calibration and setting panel loaded (Local environment: synchronized).')}
               className="p-2 text-on-surface-variant hover:bg-surface-container rounded-full transition-colors cursor-pointer"
             >
               <Settings className="w-5 h-5" />
@@ -521,8 +521,6 @@ export default function App() {
             <button 
               onClick={() => {
                 setActiveScreen('overview');
-                // Use custom window alert helper or trigger the dashboard manual addition modal directly
-                alert('Add donation manual form triggered. You can insert records directly using the "Add Donation" module on the main dashboard Overview screen!');
               }}
               className="bg-primary hover:bg-primary-container text-on-primary px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 uppercase tracking-wider"
             >
