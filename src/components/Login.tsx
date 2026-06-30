@@ -22,6 +22,49 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebase';
 
+// Helper to detect fake or disposable email addresses
+const isFakeEmail = (emailStr: string): boolean => {
+  const trimmed = emailStr.toLowerCase().trim();
+  if (!trimmed) return false;
+  
+  // Basic regex check for standard format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const isWellFormed = emailRegex.test(trimmed);
+
+  // Blocked specific placeholders & common fake patterns
+  const blockedAddresses = [
+    'abc@gmail.com', 'test@gmail.com', 'xyz@gmail.com', 'test@test.com', 
+    'test@example.com', 'admin@gmail.com', 'user@gmail.com', 'hello@gmail.com',
+    'placeholder@gmail.com', 'noone@gmail.com', 'admin@admin.com', 'a@a.com',
+    'b@b.com', 'asdf@asdf.com', 'qwer@qwer.com', 'temp@gmail.com', 'fake@gmail.com',
+    'placeholder@care.org', 'test@care.org'
+  ];
+  if (blockedAddresses.includes(trimmed)) {
+    return true;
+  }
+
+  // Blocked disposable domain check & common fake domains
+  const blockedDomains = [
+    'mailinator.com', 'yopmail.com', 'tempmail.com', 'trashmail.com', 
+    'dispostable.com', '10minutemail.com', 'guerrillamail.com', 'sharklasers.com',
+    'getairmail.com', 'disposable.com', 'fake.com', 'test.com', 'example.com',
+    'tempmail.net', 'tempmail.org', 'fakeinbox.com', 'mailnesia.com', 'mailcatch.com'
+  ];
+  const domain = trimmed.split('@')[1];
+  if (domain && blockedDomains.includes(domain)) {
+    return true;
+  }
+
+  // Basic check for obvious sequential/meaningless patterns like abcde@...
+  const localPart = trimmed.split('@')[0];
+  if (localPart && isWellFormed && (localPart.length < 3 || /^(.)\1+$/.test(localPart))) {
+    // If local part is too short (less than 3 chars) or all same characters (e.g. "aaa", "zz")
+    return true;
+  }
+
+  return false;
+};
+
 interface LoginProps {
   onLoginSuccess: (session: UserSession) => void;
 }
@@ -40,6 +83,17 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showVerificationSent, setShowVerificationSent] = useState(false);
+
+  // Real-time verification warning for fake/disposable email
+  React.useEffect(() => {
+    if (activeTab === 'register' && email.trim() !== '') {
+      if (isFakeEmail(email)) {
+        setErrorMsg("Please enter a valid, active email address");
+      } else {
+        setErrorMsg(prev => prev === "Please enter a valid, active email address" ? null : prev);
+      }
+    }
+  }, [email, activeTab]);
 
   // Auto-fill credentials depending on selected role
   React.useEffect(() => {
@@ -106,6 +160,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             const currentUser = auth.currentUser;
 
             if (currentUser && !currentUser.emailVerified) {
+              try {
+                await auth.signOut();
+              } catch (signOutErr) {
+                console.error("Error signing out unverified user during login:", signOutErr);
+              }
               setErrorMsg("Please verify your email address. Check your inbox for the verification link.");
               setIsSubmitting(false);
               return;
@@ -142,6 +201,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         // 4. Restrict account registration on the public signup page to the 'donor' role only
         if (role !== 'donor') {
           setErrorMsg("Registration Restricted: Only Donor accounts can register publicly. Staff & Supervisor accounts must be pre-configured.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        // 5. Frontend Fake Email Detection
+        if (isFakeEmail(email)) {
+          setErrorMsg("Please enter a valid, active email address");
           setIsSubmitting(false);
           return;
         }
@@ -184,12 +250,23 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           return;
         }
 
-        // Send Email Verification
+        // Send Email Verification with robust error handling
         if (authUser) {
           try {
             await sendEmailVerification(authUser);
           } catch (verificationErr: any) {
             console.error("Failed to send verification email:", verificationErr);
+            setErrorMsg(`Verification Email Error: ${verificationErr.message || "Unable to send verification link. Please try again."}`);
+            
+            // Clean up the created auth user so they are not left hanging in a bad unverified state
+            try {
+              await authUser.delete();
+            } catch (deleteErr) {
+              console.error("Failed to clean up Auth user after failed verification send:", deleteErr);
+            }
+            
+            setIsSubmitting(false);
+            return;
           }
         }
 
@@ -204,6 +281,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         };
 
         await registerUser(newDbUser);
+
+        // Sign out newly registered user so they aren't authenticated until verified
+        try {
+          await auth.signOut();
+        } catch (signOutErr) {
+          console.error("Error signing out after registration:", signOutErr);
+        }
 
         setSuccessMsg("Registration successful! A verification email has been sent to your inbox.");
         setShowVerificationSent(true);
@@ -587,7 +671,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 <button 
                   type="submit"
                   id="submit-auth-btn"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || (activeTab === 'register' && isFakeEmail(email))}
                   className="w-full bg-primary hover:bg-primary-container text-on-primary py-3.5 rounded-xl font-semibold text-xs transition-all shadow-sm active:scale-[0.98] mt-4 flex items-center justify-center gap-2 uppercase tracking-wider cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? (
