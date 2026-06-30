@@ -26,12 +26,20 @@ import ImpactReports from './components/ImpactReports';
 
 import { INITIAL_DONATIONS, INITIAL_NEEDS, INITIAL_LOGS } from './data';
 import { DonationItem, ChildNeed, AuditLog, UserSession } from './types';
+import { 
+  fetchDonations, 
+  fetchNeeds, 
+  fetchLogs, 
+  saveDonationItem, 
+  saveNeedItem, 
+  saveAuditLog 
+} from './firebaseService';
 
 export default function App() {
   const [userSession, setUserSession] = useState<UserSession | null>(null);
   const [activeScreen, setActiveScreen] = useState<'overview' | 'scanner' | 'reports'>('overview');
   
-  // Databases States with LocalStorage Persistence
+  // Databases States with LocalStorage and Firebase synchronization
   const [donations, setDonations] = useState<DonationItem[]>(() => {
     const saved = localStorage.getItem('careinventory_donations');
     return saved ? JSON.parse(saved) : INITIAL_DONATIONS;
@@ -44,6 +52,31 @@ export default function App() {
     const saved = localStorage.getItem('careinventory_logs');
     return saved ? JSON.parse(saved) : INITIAL_LOGS;
   });
+
+  const [isLoadingLive, setIsLoadingLive] = useState(true);
+
+  // Fetch from Firebase on Mount
+  useEffect(() => {
+    async function loadLiveData() {
+      try {
+        setIsLoadingLive(true);
+        const [liveDonations, liveNeeds, liveLogs] = await Promise.all([
+          fetchDonations(),
+          fetchNeeds(),
+          fetchLogs()
+        ]);
+        
+        if (liveDonations && liveDonations.length > 0) setDonations(liveDonations);
+        if (liveNeeds && liveNeeds.length > 0) setNeeds(liveNeeds);
+        if (liveLogs && liveLogs.length > 0) setLogs(liveLogs);
+      } catch (err) {
+        console.error("Failed to load data from Firebase, falling back to local storage:", err);
+      } finally {
+        setIsLoadingLive(false);
+      }
+    }
+    loadLiveData();
+  }, []);
 
   // Synchronize state changes to localStorage
   useEffect(() => {
@@ -84,7 +117,7 @@ export default function App() {
     setIsMobileMenuOpen(false);
   };
 
-  const handleAddDonation = (newItem: Omit<DonationItem, 'id'>) => {
+  const handleAddDonation = async (newItem: Omit<DonationItem, 'id'>) => {
     const randomId = `#REG-${Math.floor(Math.random() * 9000) + 1000}`;
     const addedItem: DonationItem = {
       ...newItem,
@@ -119,21 +152,33 @@ export default function App() {
       `Registered manual entry: ${newItem.qty}x ${newItem.name}`,
       ...prev
     ]);
+
+    // Async write to live Firestore DB
+    try {
+      await Promise.all([
+        saveDonationItem(addedItem),
+        saveAuditLog(newLog)
+      ]);
+    } catch (err) {
+      console.error("Firestore persistence error:", err);
+    }
   };
 
-  const handleProcureNeed = (needId: string) => {
+  const handleProcureNeed = async (needId: string) => {
     // Locate target need
     const targetNeed = needs.find(n => n.id === needId);
     if (!targetNeed) return;
 
+    const updatedNeed: ChildNeed = {
+      ...targetNeed,
+      matchingStatus: 'Match Found',
+      statusDetails: `${targetNeed.quantity || 5} emergency kits allocated from logistics pipeline.`
+    };
+
     // Simulate immediate procurement matching
     setNeeds(prev => prev.map(n => {
       if (n.id === needId) {
-        return {
-          ...n,
-          matchingStatus: 'Match Found',
-          statusDetails: `${n.quantity || 5} emergency kits allocated from logistics pipeline.`
-        };
+        return updatedNeed;
       }
       return n;
     }));
@@ -164,6 +209,16 @@ export default function App() {
       `Emergency Procured: ${targetNeed.title} fully synchronized.`,
       ...prev
     ]);
+
+    // Async write to live Firestore DB
+    try {
+      await Promise.all([
+        saveNeedItem(updatedNeed),
+        saveAuditLog(newLog)
+      ]);
+    } catch (err) {
+      console.error("Firestore persistence error:", err);
+    }
   };
 
   // Render Login if no active session
@@ -567,7 +622,9 @@ export default function App() {
               <span className="relative block w-2.5 h-2.5 bg-secondary rounded-full"></span>
             </div>
             <p className="text-on-surface-variant font-medium">
-              AI Logistics Engine: <span className="text-secondary font-bold">Synchronized</span>
+              Firebase DB: <span className={isLoadingLive ? "text-primary font-bold animate-pulse" : "text-secondary font-bold"}>
+                {isLoadingLive ? "Synchronizing..." : "Live Cloud Connected"}
+              </span>
             </p>
           </div>
           <div className="flex gap-6 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant text-center sm:text-right">
