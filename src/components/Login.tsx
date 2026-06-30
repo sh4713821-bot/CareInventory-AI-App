@@ -8,9 +8,13 @@ import {
   ArrowRight, 
   UserCheck, 
   User, 
-  Heart 
+  Heart,
+  Loader2,
+  Eye,
+  EyeOff 
 } from 'lucide-react';
 import { Role, UserSession } from '../types';
+import { fetchUserByEmail, registerUser } from '../firebaseService';
 
 interface LoginProps {
   onLoginSuccess: (session: UserSession) => void;
@@ -21,48 +25,133 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [role, setRole] = useState<Role>('supervisor');
   const [email, setEmail] = useState('manager@ngo.org');
   const [password, setPassword] = useState('password123');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [name, setName] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Auto-fill credentials depending on selected role
   React.useEffect(() => {
-    if (role === 'supervisor') {
-      setEmail('manager@ngo.org');
-    } else if (role === 'staff') {
-      setEmail('field.staff@ngo.org');
-    } else {
-      setEmail('donor@care.org');
+    if (activeTab === 'login') {
+      if (role === 'supervisor') {
+        setEmail('manager@ngo.org');
+      } else if (role === 'staff') {
+        setEmail('field.staff@ngo.org');
+      } else {
+        setEmail('donor@care.org');
+      }
     }
-  }, [role]);
+  }, [role, activeTab]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // When switching tabs, clear notifications and restrict role if registering
+  React.useEffect(() => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    if (activeTab === 'register') {
+      setRole('donor');
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
+    } else {
+      setRole('supervisor');
+    }
+  }, [activeTab]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Set user details depending on selected role
-    let session: UserSession;
-    if (role === 'supervisor') {
-      session = {
-        name: 'Sarah Jenkins',
-        role: 'supervisor',
-        title: 'Inventory Lead',
-        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDHkzZKNH2tP5f7-2AnyIjzV7HfdqStZHIimCMF1mjAVu9oaGSBEHVH3oWCv7nR2eASJpk6PF9Msa_mxxB3ZP-PcjCMxF-23_pIHkxym-xhZM3mskCNyfklBkFUXimeH2o0Ypjyfhed1VfRyD__-EvV9O2JeAeYwnrtyV7vI40_nZJGCi8RxRW2KAFdhZ-vt_HsSmRsxYoaECmtIerSsau8v8J5PeqtwxLqfho1Ith5-6uXwkeYS55rHatUT7uaeHgJ_qZpeyMrg_Jo'
-      };
-    } else if (role === 'staff') {
-      session = {
-        name: 'Sarah Mitchell',
-        role: 'staff',
-        title: 'Field Manager',
-        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAHY3xmdKvR7x4vWRwU2kvi9D9meFjUDlkniKMKq7Vf4-HNrMkzOKRY68gH986QIzcxLvYh5VfmSTPZ1v80pfR8JjzwpMhS8hE22oFRPSaoZiIVluVNfd_off3AYrwAiZ7wUP4T5l6jdVhHI1hBYw4OP1Cv6tk1gtJcACa4yKUqDB-ZEJZ01emjUc6bEfB_coGOV-M-RCrSz3IIJL49klJtAjku3jxYFF2M3cw_YqDipl5oS-DObMT9jwVThToydgdeps_q6E_Xim8_'
-      };
-    } else {
-      session = {
-        name: 'Alexander Reed',
-        role: 'donor',
-        title: 'Community Donor',
-        avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBClIYQ5HryYAOBT_L-Pr5ljQqT2p_F3XtgVb6g_r-ddSRGsVEyLtmxnpqCvVwHs0j_ubZrxKQgRL6R6lB4oFJmOdvf7KZ845Wd_NtvPY_EI_MPgd_n52TuaQ3TFQkgTWf9QjGWBarmgN39M83jj8VSjtLtVEyc4_JZzEZZOEqQL2hitCqAc0ykLgAG0yjuZAcRg6RtAaMyrfACaB-EM7g6074NZDdF31m20hFKejK797zX7pgeHH76v0WghI1qR38czH_AxiRIDevk'
-      };
-    }
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setIsSubmitting(true);
 
-    onLoginSuccess(session);
+    try {
+      if (activeTab === 'login') {
+        // 1. Query user document in Firestore users collection
+        const dbUser = await fetchUserByEmail(email);
+
+        if (!dbUser) {
+          setErrorMsg("Account not found. Please register or verify your credentials.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Verify password simple check
+        if (dbUser.password && dbUser.password !== password) {
+          setErrorMsg("Invalid password. Please try again.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        // 2. Reject login attempt if user selects Staff/Supervisor but their database record indicates they are a 'donor'
+        if ((role === 'supervisor' || role === 'staff') && dbUser.role === 'donor') {
+          setErrorMsg("Unauthorized Access: Your account is registered as a Donor. You cannot access staff panels.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        // If they chose supervisor/staff but db says something else, let's also make sure their session matches actual role
+        const session: UserSession = {
+          name: dbUser.name,
+          role: dbUser.role,
+          title: dbUser.title,
+          avatar: dbUser.avatar
+        };
+
+        onLoginSuccess(session);
+      } else {
+        // 3. Restrict account registration on the public signup page to the 'donor' role only.
+        if (role !== 'donor') {
+          setErrorMsg("Registration Restricted: Only Donor accounts can register publicly. Staff & Supervisor accounts must be pre-configured.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        if (!name.trim()) {
+          setErrorMsg("Please enter your full name.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        if (password !== confirmPassword) {
+          setErrorMsg("Validation Error: Passwords do not match. Please ensure both passwords match exactly.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const existing = await fetchUserByEmail(email);
+        if (existing) {
+          setErrorMsg("Account already exists with this email address. Please login instead.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const newDbUser = {
+          email: email.toLowerCase().trim(),
+          name: name.trim(),
+          role: 'donor' as const,
+          title: 'Community Donor',
+          avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name.trim())}`,
+          password: password
+        };
+
+        await registerUser(newDbUser);
+        setSuccessMsg("Registration successful! You can now log in using your credentials.");
+        setActiveTab('login');
+        setRole('donor');
+        setEmail(email);
+        setPassword('');
+        setConfirmPassword('');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || "An authentication error occurred.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -167,56 +256,103 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
             {/* Forms */}
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Error and Success alerts */}
+              {errorMsg && (
+                <div className="p-3 rounded-xl bg-error/10 border border-error/20 text-error text-xs font-medium text-center flex items-center justify-center gap-2">
+                  <span>⚠️ {errorMsg}</span>
+                </div>
+              )}
+
+              {successMsg && (
+                <div className="p-3 rounded-xl bg-secondary-container/30 border border-secondary-container text-secondary text-xs font-medium text-center flex items-center justify-center gap-2">
+                  <span>✅ {successMsg}</span>
+                </div>
+              )}
+
               {/* Role Selection */}
               <div className="space-y-2">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">I am a...</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {/* Supervisor Card */}
-                  <div 
-                    id="role-supervisor"
-                    onClick={() => setRole('supervisor')}
-                    className={`p-2.5 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${
-                      role === 'supervisor' 
-                        ? 'border-primary bg-primary-fixed/20 shadow-sm' 
-                        : 'border-outline-variant bg-surface-container-low hover:border-primary/50'
-                    }`}
-                  >
-                    <UserCheck className={`w-4 h-4 ${role === 'supervisor' ? 'text-primary' : 'text-on-surface-variant'}`} />
-                    <span className="text-[9px] font-bold text-center uppercase tracking-wider leading-tight">Supervisor</span>
+                {activeTab === 'register' ? (
+                  <div className="p-4 border border-dashed border-primary/40 rounded-xl flex flex-col items-center gap-2 bg-primary/5">
+                    <Heart className="w-5 h-5 text-primary" />
+                    <span className="text-[10px] font-bold text-center uppercase tracking-wider text-primary">Public Donor Registration</span>
+                    <p className="text-[9px] text-on-surface-variant text-center leading-normal max-w-xs">
+                      Account creation on this portal is strictly limited to **Donors**. Staff and Supervisor roles are pre-configured in the database and cannot be self-registered.
+                    </p>
                   </div>
-                  
-                  {/* Staff Card */}
-                  <div 
-                    id="role-staff"
-                    onClick={() => setRole('staff')}
-                    className={`p-2.5 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${
-                      role === 'staff' 
-                        ? 'border-primary bg-primary-fixed/20 shadow-sm' 
-                        : 'border-outline-variant bg-surface-container-low hover:border-primary/50'
-                    }`}
-                  >
-                    <User className={`w-4 h-4 ${role === 'staff' ? 'text-primary' : 'text-on-surface-variant'}`} />
-                    <span className="text-[9px] font-bold text-center uppercase tracking-wider leading-tight">Staff</span>
-                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* Supervisor Card */}
+                    <div 
+                      id="role-supervisor"
+                      onClick={() => setRole('supervisor')}
+                      className={`p-2.5 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${
+                        role === 'supervisor' 
+                          ? 'border-primary bg-primary-fixed/20 shadow-sm' 
+                          : 'border-outline-variant bg-surface-container-low hover:border-primary/50'
+                      }`}
+                    >
+                      <UserCheck className={`w-4 h-4 ${role === 'supervisor' ? 'text-primary' : 'text-on-surface-variant'}`} />
+                      <span className="text-[9px] font-bold text-center uppercase tracking-wider leading-tight">Supervisor</span>
+                    </div>
+                    
+                    {/* Staff Card */}
+                    <div 
+                      id="role-staff"
+                      onClick={() => setRole('staff')}
+                      className={`p-2.5 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${
+                        role === 'staff' 
+                          ? 'border-primary bg-primary-fixed/20 shadow-sm' 
+                          : 'border-outline-variant bg-surface-container-low hover:border-primary/50'
+                      }`}
+                    >
+                      <User className={`w-4 h-4 ${role === 'staff' ? 'text-primary' : 'text-on-surface-variant'}`} />
+                      <span className="text-[9px] font-bold text-center uppercase tracking-wider leading-tight">Staff</span>
+                    </div>
 
-                  {/* Donor Card */}
-                  <div 
-                    id="role-donor"
-                    onClick={() => setRole('donor')}
-                    className={`p-2.5 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${
-                      role === 'donor' 
-                        ? 'border-primary bg-primary-fixed/20 shadow-sm' 
-                        : 'border-outline-variant bg-surface-container-low hover:border-primary/50'
-                    }`}
-                  >
-                    <Heart className={`w-4 h-4 ${role === 'donor' ? 'text-primary' : 'text-on-surface-variant'}`} />
-                    <span className="text-[9px] font-bold text-center uppercase tracking-wider leading-tight">Donor / Public</span>
+                    {/* Donor Card */}
+                    <div 
+                      id="role-donor"
+                      onClick={() => setRole('donor')}
+                      className={`p-2.5 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${
+                        role === 'donor' 
+                          ? 'border-primary bg-primary-fixed/20 shadow-sm' 
+                          : 'border-outline-variant bg-surface-container-low hover:border-primary/50'
+                      }`}
+                    >
+                      <Heart className={`w-4 h-4 ${role === 'donor' ? 'text-primary' : 'text-on-surface-variant'}`} />
+                      <span className="text-[9px] font-bold text-center uppercase tracking-wider leading-tight">Donor / Public</span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Input Fields */}
               <div className="space-y-3">
+                {/* Full Name field for register tab */}
+                {activeTab === 'register' && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block text-left" htmlFor="name-input">
+                      Full Name
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-outline">
+                        <User className="w-4 h-4 text-outline" />
+                      </span>
+                      <input 
+                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-outline-variant bg-surface-container-low focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-xs font-sans" 
+                        id="name-input" 
+                        type="text" 
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Alexander Reed" 
+                        required
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Email Address */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant" htmlFor="email-input">
@@ -240,6 +376,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                             : 'donor@care.org'
                       } 
                       required
+                      disabled={isSubmitting}
                     />
                   </div>
                 </div>
@@ -254,16 +391,67 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       <Lock className="w-4 h-4" />
                     </span>
                     <input 
-                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-outline-variant bg-surface-container-low focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-xs font-sans" 
+                      className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-outline-variant bg-surface-container-low focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-xs font-sans" 
                       id="password-input" 
-                      type="password" 
+                      type={showPassword ? "text" : "password"} 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••" 
                       required
+                      disabled={isSubmitting}
                     />
+                    <button
+                      type="button"
+                      id="toggle-password-visibility"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors focus:outline-none flex items-center justify-center p-1 rounded-md hover:bg-surface-container-high"
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
                   </div>
                 </div>
+
+                {/* Confirm Password field for register tab */}
+                {activeTab === 'register' && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block text-left" htmlFor="confirm-password-input">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-outline">
+                        <Lock className="w-4 h-4" />
+                      </span>
+                      <input 
+                        className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-outline-variant bg-surface-container-low focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-xs font-sans" 
+                        id="confirm-password-input" 
+                        type={showConfirmPassword ? "text" : "password"} 
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••" 
+                        required
+                        disabled={isSubmitting}
+                      />
+                      <button
+                        type="button"
+                        id="toggle-confirm-password-visibility"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors focus:outline-none flex items-center justify-center p-1 rounded-md hover:bg-surface-container-high"
+                        title={showConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {activeTab === 'login' && (
@@ -274,6 +462,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       type="checkbox" 
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
+                      disabled={isSubmitting}
                     />
                     <span className="text-[11px] text-on-surface-variant font-medium">Remember me</span>
                   </label>
@@ -287,10 +476,17 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               <button 
                 type="submit"
                 id="submit-auth-btn"
-                className="w-full bg-primary hover:bg-primary-container text-on-primary py-3.5 rounded-xl font-semibold text-xs transition-all shadow-sm active:scale-[0.98] mt-4 flex items-center justify-center gap-2 uppercase tracking-wider cursor-pointer"
+                disabled={isSubmitting}
+                className="w-full bg-primary hover:bg-primary-container text-on-primary py-3.5 rounded-xl font-semibold text-xs transition-all shadow-sm active:scale-[0.98] mt-4 flex items-center justify-center gap-2 uppercase tracking-wider cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                <span>{activeTab === 'login' ? 'Sign In' : 'Register Now'}</span>
-                <ArrowRight className="w-4 h-4" />
+                {isSubmitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                ) : (
+                  <>
+                    <span>{activeTab === 'login' ? 'Sign In' : 'Register Now'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
           </div>

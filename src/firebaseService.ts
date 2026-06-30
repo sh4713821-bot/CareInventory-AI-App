@@ -1,6 +1,7 @@
 import { 
   collection, 
   getDocs, 
+  getDoc,
   addDoc, 
   setDoc, 
   doc, 
@@ -10,17 +11,64 @@ import {
   limit
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { DonationItem, ChildNeed, AuditLog } from "./types";
+import { DonationItem, ChildNeed, AuditLog, Role } from "./types";
 import { INITIAL_DONATIONS, INITIAL_NEEDS, INITIAL_LOGS } from "./data";
 
 // Collection Names
 const DONATIONS_COL = "donations";
 const NEEDS_COL = "needs";
 const LOGS_COL = "logs";
+const USERS_COL = "users";
+
+export interface DatabaseUser {
+  email: string;
+  name: string;
+  role: Role;
+  title: string;
+  avatar: string;
+  password?: string;
+}
+
+const INITIAL_USERS: DatabaseUser[] = [
+  {
+    email: "manager@ngo.org",
+    name: "Sarah Jenkins",
+    role: "supervisor",
+    title: "Inventory Lead",
+    avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuDHkzZKNH2tP5f7-2AnyIjzV7HfdqStZHIimCMF1mjAVu9oaGSBEHVH3oWCv7nR2eASJpk6PF9Msa_mxxB3ZP-PcjCMxF-23_pIHkxym-xhZM3mskCNyfklBkFUXimeH2o0Ypjyfhed1VfRyD__-EvV9O2JeAeYwnrtyV7vI40_nZJGCi8RxRW2KAFdhZ-vt_HsSmRsxYoaECmtIerSsau8v8J5PeqtwxLqfho1Ith5-6uXwkeYS55rHatUT7uaeHgJ_qZpeyMrg_Jo",
+    password: "password123"
+  },
+  {
+    email: "field.staff@ngo.org",
+    name: "Sarah Mitchell",
+    role: "staff",
+    title: "Field Manager",
+    avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuAHY3xmdKvR7x4vWRwU2kvi9D9meFjUDlkniKMKq7Vf4-HNrMkzOKRY68gH986QIzcxLvYh5VfmSTPZ1v80pfR8JjzwpMhS8hE22oFRPSaoZiIVluVNfd_off3AYrwAiZ7wUP4T5l6jdVhHI1hBYw4OP1Cv6tk1gtJcACa4yKUqDB-ZEJZ01emjUc6bEfB_coGOV-M-RCrSz3IIJL49klJtAjku3jxYFF2M3cw_YqDipl5oS-DObMT9jwVThToydgdeps_q6E_Xim8_",
+    password: "password123"
+  },
+  {
+    email: "donor@care.org",
+    name: "Alexander Reed",
+    role: "donor",
+    title: "Community Donor",
+    avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuBClIYQ5HryYAOBT_L-Pr5ljQqT2p_F3XtgVb6g_r-ddSRGsVEyLtmxnpqCvVwHs0j_ubZrxKQgRL6R6lB4oFJmOdvf7KZ845Wd_NtvPY_EI_MPgd_n52TuaQ3TFQkgTWf9QjGWBarmgN39M83jj8VSjtLtVEyc4_JZzEZZOEqQL2hitCqAc0ykLgAG0yjuZAcRg6RtAaMyrfACaB-EM7g6074NZDdF31m20hFKejK797zX7pgeHH76v0WghI1qR38czH_AxiRIDevk",
+    password: "password123"
+  }
+];
 
 // Helper to seed database if empty
 export async function seedDatabaseIfEmpty() {
   try {
+    // Check Users
+    const usersSnapshot = await getDocs(collection(db, USERS_COL));
+    if (usersSnapshot.empty) {
+      console.log("Seeding initial users into Firestore...");
+      for (const user of INITIAL_USERS) {
+        const docId = user.email.toLowerCase().trim();
+        await setDoc(doc(db, USERS_COL, docId), user);
+      }
+    }
+
     // Check Donations
     const donationsSnapshot = await getDocs(collection(db, DONATIONS_COL));
     if (donationsSnapshot.empty) {
@@ -134,3 +182,34 @@ export async function saveAuditLog(log: AuditLog): Promise<void> {
     throw error;
   }
 }
+
+// Fetch a user by email from Firestore (checks/seeds first to ensure users are initialized)
+export async function fetchUserByEmail(email: string): Promise<DatabaseUser | null> {
+  try {
+    await seedDatabaseIfEmpty();
+    const docId = email.toLowerCase().trim();
+    const docRef = doc(db, USERS_COL, docId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as DatabaseUser;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching user from Firestore:", error);
+    throw error;
+  }
+}
+
+// Register a new user in Firestore
+export async function registerUser(user: DatabaseUser): Promise<void> {
+  try {
+    await seedDatabaseIfEmpty();
+    const docId = user.email.toLowerCase().trim();
+    const docRef = doc(db, USERS_COL, docId);
+    await setDoc(docRef, user);
+  } catch (error) {
+    console.error("Error registering user in Firestore:", error);
+    throw error;
+  }
+}
+

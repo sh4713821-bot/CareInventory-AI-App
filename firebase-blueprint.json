@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "users": {
+      "title": "users",
+      "description": "User profile with role verification",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["supervisor", "staff", "donor"] },
+        "title": { "type": "string" },
+        "avatar": { "type": "string" },
+        "password": { "type": "string" }
+      },
+      "required": ["email", "name", "role", "title", "avatar"]
+    },
+    "donations": {
+      "title": "donations",
+      "description": "Donated items track inventory and status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string", "enum": ["Medical & Nutrition", "Food", "Hygiene", "Clothing", "Educational"] },
+        "qty": { "type": "number" },
+        "unit": { "type": "string" },
+        "expiry": { "type": "string" },
+        "status": { "type": "string", "enum": ["Optimal", "Critical", "Stock Low"] },
+        "trackingStatus": { "type": "string", "enum": ["Pending", "Received", "Sorted", "Dispatched"] },
+        "donorName": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "qty", "unit", "expiry", "status"]
+    },
+    "needs": {
+      "title": "needs",
+      "description": "Aggregated critical needs of children and matching status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "priority": { "type": "string", "enum": ["High", "Med", "Urgent"] },
+        "age": { "type": "string" },
+        "quantity": { "type": "number" },
+        "season": { "type": "string" },
+        "matchingStatus": { "type": "string", "enum": ["Match Found", "Searching", "Needs Procurement"] },
+        "statusDetails": { "type": "string" }
+      },
+      "required": ["id", "title", "priority", "matchingStatus", "statusDetails"]
+    },
+    "logs": {
+      "title": "logs",
+      "description": "Activity audit log for full traceability",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "event": { "type": "string" },
+        "entity": { "type": "string" },
+        "status": { "type": "string", "enum": ["Completed", "In Transit", "Verified"] },
+        "verified": { "type": "boolean" }
+      },
+      "required": ["id", "timestamp", "event", "entity", "status", "verified"]
+    }
+  },
+  "firestore": {
+    "users/{email}": {
+      "schema": "users",
+      "description": "Verified user accounts with authentication roles"
+    },
+    "donations/{donationId}": {
+      "schema": "donations",
+      "description": "Live resource inventory items and tracking"
+    },
+    "needs/{needId}": {
+      "schema": "needs",
+      "description": "Logged child resource needs and status"
+    },
+    "logs/{logId}": {
+      "schema": "logs",
+      "description": "Audit trails of distribution operations"
+    }
+  }
+}
