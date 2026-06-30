@@ -2,6 +2,17 @@ import { DonationItem, ChildNeed, AuditLog } from './types';
 
 export const INITIAL_DONATIONS: DonationItem[] = [
   {
+    id: '#REG-3542',
+    name: 'Thermal Blankets & Winter Jackets Pack',
+    category: 'Clothing',
+    qty: 15,
+    unit: 'Packs',
+    expiry: '2026-12-31',
+    status: 'Optimal',
+    trackingStatus: 'Received',
+    donorName: 'Alexander Reed'
+  },
+  {
     id: '#INF-9283',
     name: 'Baby Formula (Stage 1)',
     category: 'Medical & Nutrition',

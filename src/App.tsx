@@ -101,6 +101,7 @@ export default function App() {
     'New vaccine batch verified'
   ]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isDonateModalOpen, setIsDonateModalOpen] = useState(false);
 
   // Handlers
   const handleLogin = (session: UserSession) => {
@@ -289,13 +290,67 @@ export default function App() {
       {/* 1. LEFT SIDEBAR (Desktop Anchor) */}
       <aside className="w-64 fixed inset-y-0 left-0 bg-surface border-r border-outline-variant/30 hidden md:flex flex-col py-6 z-40">
         {/* Brand Header Logo */}
-        <div className="px-6 mb-8 flex items-center gap-3">
+        <div className="px-6 mb-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-on-primary shadow-inner">
             <Baby className="w-5 h-5 text-white" />
           </div>
           <div>
             <h1 className="text-sm font-extrabold tracking-tight text-primary uppercase">CareInventory</h1>
             <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Resource Management</p>
+          </div>
+        </div>
+
+        {/* Role Portal Switcher Widget */}
+        <div className="px-4 mb-4">
+          <div className="p-3 bg-surface-container-low border border-outline-variant/30 rounded-2xl space-y-2">
+            <p className="text-[9px] font-extrabold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-primary animate-pulse" />
+              <span>Portal Switcher (Review Mode)</span>
+            </p>
+            <div className="grid grid-cols-1 gap-1 text-[11px]">
+              <button 
+                onClick={() => {
+                  setUserSession(prev => prev ? { ...prev, role: 'donor', title: 'Generous Donor' } : null);
+                  setActiveScreen('overview');
+                }}
+                className={`w-full py-1.5 px-3 rounded-lg font-bold text-left transition-all cursor-pointer flex items-center gap-1.5 ${
+                  userSession.role === 'donor' 
+                    ? 'bg-primary text-white shadow-sm font-extrabold scale-[1.02]' 
+                    : 'text-on-surface hover:bg-surface-container-high'
+                }`}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full ${userSession.role === 'donor' ? 'bg-white' : 'bg-amber-500 animate-pulse'}`}></div>
+                <span>Donor Portal View</span>
+              </button>
+              <button 
+                onClick={() => {
+                  setUserSession(prev => prev ? { ...prev, role: 'staff', title: 'Warehouse Logistics Pro' } : null);
+                  setActiveScreen('scanner');
+                }}
+                className={`w-full py-1.5 px-3 rounded-lg font-bold text-left transition-all cursor-pointer flex items-center gap-1.5 ${
+                  userSession.role === 'staff' 
+                    ? 'bg-primary text-white shadow-sm font-extrabold scale-[1.02]' 
+                    : 'text-on-surface hover:bg-surface-container-high'
+                }`}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full ${userSession.role === 'staff' ? 'bg-white' : 'bg-blue-500 animate-pulse'}`}></div>
+                <span>Staff Operational View</span>
+              </button>
+              <button 
+                onClick={() => {
+                  setUserSession(prev => prev ? { ...prev, role: 'supervisor', title: 'Lead Operations Supervisor' } : null);
+                  setActiveScreen('overview');
+                }}
+                className={`w-full py-1.5 px-3 rounded-lg font-bold text-left transition-all cursor-pointer flex items-center gap-1.5 ${
+                  userSession.role === 'supervisor' 
+                    ? 'bg-primary text-white shadow-sm font-extrabold scale-[1.02]' 
+                    : 'text-on-surface hover:bg-surface-container-high'
+                }`}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full ${userSession.role === 'supervisor' ? 'bg-white' : 'bg-emerald-500 animate-pulse'}`}></div>
+                <span>Manager Analytics Panel</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -520,9 +575,13 @@ export default function App() {
             {/* Quick action button */}
             <button 
               onClick={() => {
-                setActiveScreen('overview');
+                if (userSession.role === 'donor') {
+                  setIsDonateModalOpen(true);
+                } else {
+                  setActiveScreen('overview');
+                }
               }}
-              className="bg-primary hover:bg-primary-container text-on-primary px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 uppercase tracking-wider"
+              className="bg-primary hover:bg-primary-container text-on-primary px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 uppercase tracking-wider animate-pulse"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Add Donation</span>
@@ -558,6 +617,63 @@ export default function App() {
                   <button onClick={() => setIsMobileMenuOpen(false)} className="p-1 rounded-full hover:bg-surface-container cursor-pointer">
                     <X className="w-4.5 h-4.5" />
                   </button>
+                </div>
+
+                {/* Role Portal Switcher Widget */}
+                <div className="px-4 mb-4">
+                  <div className="p-3 bg-surface-container-low border border-outline-variant/30 rounded-xl space-y-2">
+                    <p className="text-[9px] font-extrabold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-primary animate-pulse" />
+                      <span>Portal Switcher (Review)</span>
+                    </p>
+                    <div className="grid grid-cols-1 gap-1 text-[11px]">
+                      <button 
+                        onClick={() => {
+                          setUserSession(prev => prev ? { ...prev, role: 'donor', title: 'Generous Donor' } : null);
+                          setActiveScreen('overview');
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full py-1.5 px-3 rounded-lg font-bold text-left transition-all cursor-pointer flex items-center gap-1.5 ${
+                          userSession.role === 'donor' 
+                            ? 'bg-primary text-white shadow-sm font-extrabold' 
+                            : 'text-on-surface hover:bg-surface-container-high'
+                        }`}
+                      >
+                        <div className={`w-1.5 h-1.5 rounded-full ${userSession.role === 'donor' ? 'bg-white' : 'bg-amber-500'}`}></div>
+                        <span>Donor Portal View</span>
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setUserSession(prev => prev ? { ...prev, role: 'staff', title: 'Warehouse Logistics Pro' } : null);
+                          setActiveScreen('scanner');
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full py-1.5 px-3 rounded-lg font-bold text-left transition-all cursor-pointer flex items-center gap-1.5 ${
+                          userSession.role === 'staff' 
+                            ? 'bg-primary text-white shadow-sm font-extrabold' 
+                            : 'text-on-surface hover:bg-surface-container-high'
+                        }`}
+                      >
+                        <div className={`w-1.5 h-1.5 rounded-full ${userSession.role === 'staff' ? 'bg-white' : 'bg-blue-500'}`}></div>
+                        <span>Staff Operational View</span>
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setUserSession(prev => prev ? { ...prev, role: 'supervisor', title: 'Lead Operations Supervisor' } : null);
+                          setActiveScreen('overview');
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full py-1.5 px-3 rounded-lg font-bold text-left transition-all cursor-pointer flex items-center gap-1.5 ${
+                          userSession.role === 'supervisor' 
+                            ? 'bg-primary text-white shadow-sm font-extrabold' 
+                            : 'text-on-surface hover:bg-surface-container-high'
+                        }`}
+                      >
+                        <div className={`w-1.5 h-1.5 rounded-full ${userSession.role === 'supervisor' ? 'bg-white' : 'bg-emerald-500'}`}></div>
+                        <span>Manager Analytics Panel</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <nav className="flex-1 px-4 space-y-1">
@@ -662,6 +778,8 @@ export default function App() {
                     donations={donations}
                     onAddDonation={handleAddDonation}
                     userSession={userSession}
+                    isDonateModalOpen={isDonateModalOpen}
+                    setIsDonateModalOpen={setIsDonateModalOpen}
                   />
                 ) : (
                   <SupervisorDashboard 

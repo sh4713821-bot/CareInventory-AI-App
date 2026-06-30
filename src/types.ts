@@ -17,6 +17,7 @@ export interface DonationItem {
   status: 'Optimal' | 'Critical' | 'Stock Low';
   trackingStatus?: 'Pending' | 'Received' | 'Sorted' | 'Dispatched';
   donorName?: string;
+  description?: string;
 }
 
 export interface ChildNeed {

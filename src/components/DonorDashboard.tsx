@@ -16,22 +16,26 @@ import {
   Truck, 
   ListTodo,
   Smile,
-  Users
+  Users,
+  X,
+  Plus,
+  RefreshCw,
+  Camera
 } from 'lucide-react';
 import { DonationItem, ChildNeed, UserSession } from '../types';
 
 const getNormalizedStatus = (rawStatus: string | undefined): string => {
-  if (!rawStatus) return 'Pending';
+  if (!rawStatus) return 'Submitted';
   const s = rawStatus.toLowerCase().trim();
   
+  if (s === 'pending' || s === 'submitted') {
+    return 'Submitted';
+  }
   if (s === 'received' || s === 'received_at_vault' || s === 'received at vault') {
     return 'Received';
   }
-  if (s === 'pending') {
-    return 'Pending';
-  }
-  if (s === 'sorted') {
-    return 'Sorted';
+  if (s === 'ai_audited' || s === 'sorted') {
+    return 'AI Audited';
   }
   if (s === 'dispatched') {
     return 'Dispatched';
@@ -41,17 +45,17 @@ const getNormalizedStatus = (rawStatus: string | undefined): string => {
   if (s.includes('received') || s.includes('vault')) {
     return 'Received';
   }
-  if (s.includes('pending')) {
-    return 'Pending';
+  if (s.includes('pending') || s.includes('submit')) {
+    return 'Submitted';
   }
-  if (s.includes('sort')) {
-    return 'Sorted';
+  if (s.includes('ai_audited') || s.includes('sort') || s.includes('audit')) {
+    return 'AI Audited';
   }
-  if (s.includes('dispatch')) {
+  if (s.includes('dispatch') || s.includes('deliver')) {
     return 'Dispatched';
   }
   
-  return 'Pending';
+  return 'Submitted';
 };
 
 interface DonorDashboardProps {
@@ -59,39 +63,54 @@ interface DonorDashboardProps {
   donations: DonationItem[];
   onAddDonation: (item: Omit<DonationItem, 'id'>) => void;
   userSession: UserSession;
+  isDonateModalOpen: boolean;
+  setIsDonateModalOpen: (open: boolean) => void;
+  onUpdateTrackingStatus?: (id: string, status: 'Pending' | 'Received' | 'Sorted' | 'Dispatched') => void;
 }
 
-export default function DonorDashboard({ needs, donations, onAddDonation, userSession }: DonorDashboardProps) {
+export default function DonorDashboard({ 
+  needs, 
+  donations, 
+  onAddDonation, 
+  userSession,
+  isDonateModalOpen,
+  setIsDonateModalOpen,
+  onUpdateTrackingStatus
+}: DonorDashboardProps) {
   // Navigation within Donor Dashboard
   const [activeTab, setActiveTab] = useState<'needs' | 'donate' | 'history' | 'track'>('needs');
   
   // Track Donation State
   const [trackId, setTrackId] = useState('');
   const [searchedId, setSearchedId] = useState('');
-  const [trackResult, setTrackResult] = useState<DonationItem | null>(null);
 
   // Submit Donation Form States
   const [formName, setFormName] = useState('');
-  const [formCategory, setFormCategory] = useState<DonationItem['category']>('Food');
+  const [formCategory, setFormCategory] = useState<string>('Food'); // Food, Clothing, Medical, Supply
   const [formQty, setFormQty] = useState<number>(10);
   const [formUnit, setFormUnit] = useState('Units');
   const [formExpiry, setFormExpiry] = useState('');
+  const [formDescription, setFormDescription] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Auto-set form from an Active Need
+  // Scanning simulation states
+  const [isScanningDropoff, setIsScanningDropoff] = useState(false);
+  const [scanSuccess, setScanSuccess] = useState(false);
+
+  // Auto-set form from an Active Need and open Modal instantly
   const handleDonateNeed = (need: ChildNeed) => {
     setFormName(need.title);
     setFormQty(need.quantity || 10);
     if (need.title.toLowerCase().includes('milk') || need.title.toLowerCase().includes('food') || need.title.toLowerCase().includes('formula')) {
       setFormCategory('Food');
     } else if (need.title.toLowerCase().includes('medical') || need.title.toLowerCase().includes('kit') || need.title.toLowerCase().includes('vaccine')) {
-      setFormCategory('Medical & Nutrition');
+      setFormCategory('Medical');
     } else if (need.title.toLowerCase().includes('clothing') || need.title.toLowerCase().includes('jacket') || need.title.toLowerCase().includes('coat')) {
       setFormCategory('Clothing');
     } else if (need.title.toLowerCase().includes('school') || need.title.toLowerCase().includes('kit') || need.title.toLowerCase().includes('book')) {
-      setFormCategory('Educational');
+      setFormCategory('Supply');
     } else {
-      setFormCategory('Hygiene');
+      setFormCategory('Supply');
     }
     
     // Default expiry 3 months from now
@@ -99,26 +118,32 @@ export default function DonorDashboard({ needs, donations, onAddDonation, userSe
     fut.setMonth(fut.getMonth() + 3);
     setFormExpiry(fut.toISOString().split('T')[0]);
 
-    setActiveTab('donate');
+    setIsDonateModalOpen(true);
   };
 
   // Handle donation submission
   const handleSubmitDonation = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim() || !formExpiry) {
-      alert('Please fill out all required fields.');
+    if (!formName.trim()) {
       return;
     }
 
+    // Map Category
+    let finalCategory: DonationItem['category'] = 'Food';
+    if (formCategory === 'Medical') finalCategory = 'Medical & Nutrition';
+    else if (formCategory === 'Clothing') finalCategory = 'Clothing';
+    else if (formCategory === 'Supply') finalCategory = 'Hygiene';
+
     onAddDonation({
       name: formName,
-      category: formCategory,
+      category: finalCategory,
       qty: formQty,
       unit: formUnit,
-      expiry: formExpiry,
+      expiry: formExpiry || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       status: 'Optimal',
       trackingStatus: 'Pending',
-      donorName: userSession.name
+      donorName: userSession.name,
+      description: formDescription
     });
 
     setSuccessMsg(`Thank you! Your donation of ${formQty} ${formUnit} of "${formName}" has been logged and is awaiting collection/drop-off.`);
@@ -127,8 +152,10 @@ export default function DonorDashboard({ needs, donations, onAddDonation, userSe
     setFormName('');
     setFormQty(10);
     setFormExpiry('');
+    setFormDescription('');
+    setIsDonateModalOpen(false);
 
-    // Reset success message after 5 seconds
+    // Reset success message after 4 seconds and route to history
     setTimeout(() => {
       setSuccessMsg('');
       setActiveTab('history');
@@ -139,20 +166,40 @@ export default function DonorDashboard({ needs, donations, onAddDonation, userSe
   const handleTrackDonation = (idToTrack: string) => {
     const formattedId = idToTrack.trim().toUpperCase();
     setSearchedId(formattedId);
-
-    // Find in global donations list
-    const found = donations.find(d => 
-      d.id.toUpperCase() === formattedId || 
-      d.id.replace('#', '').toUpperCase() === formattedId ||
-      d.id.replace('REG-', '').toUpperCase() === formattedId
-    );
-
-    if (found) {
-      setTrackResult(found);
-    } else {
-      setTrackResult(null);
-    }
+    setScanSuccess(false);
   };
+
+  // Reactively computed trackResult from global donations
+  const trackResult = searchedId
+    ? donations.find(d => 
+        d.id.toUpperCase() === searchedId || 
+        d.id.replace('#', '').toUpperCase() === searchedId ||
+        d.id.replace('REG-', '').toUpperCase() === searchedId
+      ) || null
+    : null;
+
+  // Handle live dropoff barcode verification
+  const handleTriggerDropoffScan = () => {
+    if (!trackResult) return;
+    setIsScanningDropoff(true);
+    setScanSuccess(false);
+
+    setTimeout(() => {
+      setIsScanningDropoff(false);
+      setScanSuccess(true);
+      if (onUpdateTrackingStatus) {
+        onUpdateTrackingStatus(trackResult.id, 'Received');
+      }
+    }, 2000);
+  };
+
+  // Track tab auto pre-fill with #REG-3542
+  React.useEffect(() => {
+    if (activeTab === 'track' && !trackId) {
+      setTrackId('#REG-3542');
+      handleTrackDonation('#REG-3542');
+    }
+  }, [activeTab]);
 
   // Filter personal history
   const personalHistory = donations.filter(d => 
@@ -324,149 +371,33 @@ export default function DonorDashboard({ needs, donations, onAddDonation, userSe
 
           {/* B. DONATE SUBMISSION FORM TAB */}
           {activeTab === 'donate' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Form Layout (col-span-8) */}
-              <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-outline-variant/20 shadow-sm space-y-4">
-                <div>
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-on-surface flex items-center gap-2">
-                    <Heart className="w-4 h-4 text-primary" />
-                    <span>Relief Contribution Form</span>
-                  </h3>
-                  <p className="text-xs text-on-surface-variant mt-0.5">Please specify details of the physical aid you wish to log and deliver.</p>
-                </div>
-
-                {successMsg && (
-                  <div className="p-4 bg-secondary-container/20 border border-secondary-container/40 rounded-xl flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
-                    <p className="text-xs font-semibold text-on-secondary-container leading-relaxed">{successMsg}</p>
-                  </div>
-                )}
-
-                <form onSubmit={handleSubmitDonation} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Item Name */}
-                    <div className="space-y-1 sm:col-span-2">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block" htmlFor="form-name">
-                        Aid Item / Package Name *
-                      </label>
-                      <input 
-                        type="text" 
-                        id="form-name"
-                        value={formName}
-                        onChange={(e) => setFormName(e.target.value)}
-                        placeholder="e.g. Infamil Infant Formula Pack, Winter Boots Size 4"
-                        className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-xs outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-medium text-on-surface"
-                        required
-                      />
-                    </div>
-
-                    {/* Category */}
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block" htmlFor="form-cat">
-                        Resource Category *
-                      </label>
-                      <select 
-                        id="form-cat"
-                        value={formCategory}
-                        onChange={(e) => setFormCategory(e.target.value as DonationItem['category'])}
-                        className="w-full px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-xs outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-semibold text-on-surface"
-                      >
-                        <option value="Food">Food / Nutrition</option>
-                        <option value="Medical & Nutrition">Medical Supplies</option>
-                        <option value="Clothing">Clothing & Footwear</option>
-                        <option value="Hygiene">Hygiene Kits</option>
-                        <option value="Educational">Educational Supplies</option>
-                      </select>
-                    </div>
-
-                    {/* Quantity */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block" htmlFor="form-qty">
-                          Quantity
-                        </label>
-                        <input 
-                          type="number" 
-                          id="form-qty"
-                          min="1"
-                          value={formQty}
-                          onChange={(e) => setFormQty(Number(e.target.value))}
-                          className="w-full px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-xs outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono font-bold text-on-surface"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block" htmlFor="form-unit">
-                          Unit
-                        </label>
-                        <input 
-                          type="text" 
-                          id="form-unit"
-                          value={formUnit}
-                          onChange={(e) => setFormUnit(e.target.value)}
-                          placeholder="Kits, Packs, Units"
-                          className="w-full px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-xs outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-medium text-on-surface"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Expiration Date */}
-                    <div className="space-y-1 sm:col-span-2">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block" htmlFor="form-exp">
-                        Expiration / Best Before Date *
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-outline">
-                          <Calendar className="w-4 h-4" />
-                        </span>
-                        <input 
-                          type="date" 
-                          id="form-exp"
-                          value={formExpiry}
-                          onChange={(e) => setFormExpiry(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-xs outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-semibold text-on-surface"
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <button 
-                    type="submit"
-                    className="w-full bg-primary hover:bg-primary-container text-on-primary py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:-translate-y-0.5 active:scale-95 transition-all uppercase tracking-wider cursor-pointer"
-                  >
-                    <Gift className="w-4 h-4" />
-                    <span>Submit Relief Package</span>
-                  </button>
-                </form>
+            <div className="bg-white rounded-2xl border border-outline-variant/20 p-10 text-center max-w-2xl mx-auto space-y-6 shadow-sm my-4">
+              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto text-primary">
+                <Gift className="w-8 h-8" />
               </div>
+              <div className="space-y-2">
+                <h3 className="font-extrabold text-on-surface text-base">Fulfill Direct Needs or Register Cargo</h3>
+                <p className="text-xs text-on-surface-variant leading-relaxed max-w-md mx-auto">
+                  Click the button below to log physical cargo items (Food, Clothing, Medical, Supply) into our secure catalog ledger and obtain a real-time tracking barcode telemetry ID.
+                </p>
+              </div>
+              
+              <button 
+                onClick={() => setIsDonateModalOpen(true)}
+                className="bg-primary hover:bg-primary-container text-on-primary font-bold px-6 py-3.5 rounded-xl text-xs flex items-center justify-center gap-2 mx-auto shadow-md hover:-translate-y-0.5 active:scale-95 transition-all uppercase tracking-wider cursor-pointer animate-pulse"
+              >
+                <Plus className="w-4.5 h-4.5" />
+                <span>Open Relief Contribution Form</span>
+              </button>
 
-              {/* Tips & Instructions (col-span-4) */}
-              <div className="lg:col-span-4 bg-surface-container-low p-5 rounded-2xl border border-outline-variant/20 space-y-4">
-                <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
-                  <AlertCircle className="w-4 h-4 text-primary" />
-                  <span>Submission Guidance</span>
-                </h4>
-                
-                <div className="space-y-3.5 text-xs text-on-surface-variant">
-                  <p className="leading-relaxed">
-                    By submitting this form, you request a pickup or dropdown coordinate.
-                  </p>
-                  
-                  <div className="bg-white p-3.5 rounded-xl border border-outline-variant/10 shadow-inner space-y-2">
-                    <p className="font-extrabold uppercase text-[9px] text-on-surface tracking-wider">Acceptable Standards:</p>
-                    <ul className="list-disc pl-4 space-y-1 leading-normal text-on-surface-variant">
-                      <li>Non-perishable items must have at least <strong>90 days</strong> of remaining validity.</li>
-                      <li>Formula tins must be fully sealed and original packaging undamaged.</li>
-                      <li>Clothing items are cleaned and sorted by age category.</li>
-                    </ul>
-                  </div>
-
-                  <div className="flex gap-2 p-3 bg-secondary-container/10 border border-secondary/20 rounded-xl">
-                    <CheckCircle2 className="w-4 h-4 text-secondary flex-shrink-0 mt-0.5" />
-                    <p className="text-[11px] font-medium leading-relaxed text-on-secondary-container-variant">
-                      Your items will receive a custom <strong>Tracking ID</strong> (e.g. #REG-1209) on submission. Use this ID on the "Track" screen to observe live transit metrics!
-                    </p>
-                  </div>
+              <div className="pt-4 border-t border-outline-variant/10 grid grid-cols-2 gap-4 text-left text-xs text-on-surface-variant">
+                <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/10">
+                  <span className="font-bold text-on-surface block text-[10px] uppercase tracking-wider mb-1">Standard Guidelines:</span>
+                  <p className="text-[10px] leading-snug">All infant formula, food packages and medical lots must have &gt;90 days expiry.</p>
+                </div>
+                <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/10">
+                  <span className="font-bold text-on-surface block text-[10px] uppercase tracking-wider mb-1">Real-time Telemetry:</span>
+                  <p className="text-[10px] leading-snug">Every submitted item earns a barcode tracking ID to observe sorting milestones.</p>
                 </div>
               </div>
             </div>
@@ -632,68 +563,126 @@ export default function DonorDashboard({ needs, donations, onAddDonation, userSe
                           <span className="text-[9px] uppercase tracking-wider text-outline block">Shipment ID</span>
                           <span className="font-mono text-xs font-bold text-on-surface select-all">{trackResult.id}</span>
                         </div>
-                      </div>
+                      </div>                      {/* Grid for Stepper and Live Drop-off Simulator Scanner */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                        {/* Stepper (col-span-8) */}
+                        <div className="lg:col-span-8 bg-surface-container-low/30 p-5 rounded-2xl border border-outline-variant/10">
+                          <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-4">Relief Logistics Pipeline</p>
+                          <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-8 md:gap-4 py-4">
+                            {/* Horizontal connecting background line for desktop */}
+                            <div className="absolute top-5 left-6 right-6 h-0.5 bg-surface-container hidden md:block z-0"></div>
 
-                      {/* Animated Stepper Track */}
-                      <div className="py-8 px-4">
-                        <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-8 md:gap-4">
-                          {/* Horizontal connecting background line for desktop */}
-                          <div className="absolute top-5 left-6 right-6 h-0.5 bg-surface-container hidden md:block z-0"></div>
+                            {/* Stepper items */}
+                            {[
+                              { 
+                                step: 'Submitted', 
+                                title: 'Relief Submitted', 
+                                desc: 'Item registered into CareInventory. Drop-off/Pickup requested.',
+                                icon: Clock,
+                                color: 'text-amber-500 bg-amber-50 border-amber-500'
+                              },
+                              { 
+                                step: 'Received', 
+                                title: 'Received at Vault', 
+                                desc: 'Field center processed item arrival & calibrated weight.',
+                                icon: Package,
+                                color: 'text-purple-500 bg-purple-50 border-purple-500'
+                              },
+                              { 
+                                step: 'AI Audited', 
+                                title: 'AI Audited & Sorted', 
+                                desc: 'MobileNet computer vision scanned item to verify optimal metrics.',
+                                icon: Sparkles,
+                                color: 'text-blue-500 bg-blue-50 border-blue-500'
+                              },
+                              { 
+                                step: 'Dispatched', 
+                                title: 'Dispatched to Children', 
+                                desc: 'Resource allocated and delivered directly to the designated zone.',
+                                icon: CheckCircle2,
+                                color: 'text-emerald-500 bg-emerald-50 border-emerald-500'
+                              }
+                            ].map((stepDef, idx) => {
+                              const stepsOrder = ['Submitted', 'Received', 'AI Audited', 'Dispatched'];
+                              const currentStepIdx = stepsOrder.indexOf(getNormalizedStatus(trackResult.trackingStatus));
+                              const targetStepIdx = stepsOrder.indexOf(stepDef.step as any);
+                              const isActive = targetStepIdx <= currentStepIdx;
 
-                          {/* Stepper items */}
-                          {[
-                            { 
-                              step: 'Pending', 
-                              title: 'Relief Submitted', 
-                              desc: 'Item registered into CareInventory. Drop-off/Pickup requested.',
-                              icon: Clock,
-                              color: 'text-amber-500 bg-amber-50 border-amber-500'
-                            },
-                            { 
-                              step: 'Received', 
-                              title: 'Received at Vault', 
-                              desc: 'Field center processed item arrival & calibrated weight.',
-                              icon: Package,
-                              color: 'text-purple-500 bg-purple-50 border-purple-500'
-                            },
-                            { 
-                              step: 'Sorted', 
-                              title: 'AI Audited & Sorted', 
-                              desc: 'MobileNet computer vision scanned item to verify optimal metrics.',
-                              icon: Sparkles,
-                              color: 'text-blue-500 bg-blue-50 border-blue-500'
-                            },
-                            { 
-                              step: 'Dispatched', 
-                              title: 'Dispatched to Children', 
-                              desc: 'Resource allocated and delivered directly to the designated zone.',
-                              icon: CheckCircle2,
-                              color: 'text-emerald-500 bg-emerald-50 border-emerald-500'
-                            }
-                          ].map((stepDef, idx) => {
-                            const stepsOrder = ['Pending', 'Received', 'Sorted', 'Dispatched'];
-                            const currentStepIdx = stepsOrder.indexOf(getNormalizedStatus(trackResult.trackingStatus));
-                            const targetStepIdx = stepsOrder.indexOf(stepDef.step as any);
-                            const isActive = targetStepIdx <= currentStepIdx;
+                              const IconComp = stepDef.icon;
 
-                            const IconComp = stepDef.icon;
-
-                            return (
-                              <div key={idx} className="flex md:flex-col items-start md:items-center text-left md:text-center relative z-10 max-w-xs md:flex-1 gap-4 md:gap-3">
-                                <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                                  isActive 
-                                    ? 'bg-primary text-white border-primary shadow-md scale-110' 
-                                    : 'bg-white text-outline border-surface-container'
-                                }`}>
-                                  <IconComp className="w-5 h-5" />
+                              return (
+                                <div key={idx} className="flex md:flex-col items-start md:items-center text-left md:text-center relative z-10 max-w-xs md:flex-1 gap-4 md:gap-3">
+                                  <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                    isActive 
+                                      ? 'bg-primary text-white border-primary shadow-md scale-110' 
+                                      : 'bg-white text-outline border-surface-container'
+                                  }`}>
+                                    <IconComp className="w-5 h-5" />
+                                  </div>
+                                  <div>
+                                    <h5 className={`text-xs font-extrabold tracking-tight ${isActive ? 'text-on-surface' : 'text-outline'}`}>{stepDef.title}</h5>
+                                    <p className="text-[10px] text-on-surface-variant leading-snug mt-1 max-w-[180px] md:mx-auto">{stepDef.desc}</p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <h5 className={`text-xs font-extrabold tracking-tight ${isActive ? 'text-on-surface' : 'text-outline'}`}>{stepDef.title}</h5>
-                                  <p className="text-[10px] text-on-surface-variant leading-snug mt-1 max-w-[180px] md:mx-auto">{stepDef.desc}</p>
-                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Drop-off scanner simulator card (col-span-4) */}
+                        <div className="lg:col-span-4 bg-surface-container-low p-5 rounded-2xl border border-outline-variant/30 flex flex-col justify-between h-[320px]">
+                          <div>
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-on-surface flex items-center gap-1.5">
+                              <Camera className="w-4 h-4 text-primary" />
+                              <span>Field QR / Barcode Laser Drop-off Scanner</span>
+                            </h4>
+                            <p className="text-[10px] text-on-surface-variant mt-1 leading-relaxed">
+                              Simulate scanning the shipment label barcode at the local warehouse field station.
+                            </p>
+                          </div>
+
+                          <div className="relative my-3 border-2 border-dashed border-primary/40 bg-black/95 rounded-xl flex-1 flex flex-col items-center justify-center p-4 overflow-hidden min-h-[140px]">
+                            {isScanningDropoff ? (
+                              <div className="text-center space-y-2 z-10">
+                                <RefreshCw className="w-6 h-6 text-primary animate-spin mx-auto animate-reverse" />
+                                <p className="text-[9px] text-primary font-bold animate-pulse font-mono">Laser targeting box...</p>
+                                <div className="absolute inset-x-0 h-0.5 bg-primary shadow-[0_0_10px_#1e3a8a] animate-bounce top-1/2"></div>
                               </div>
-                            );
-                          })}
+                            ) : scanSuccess || getNormalizedStatus(trackResult.trackingStatus) !== 'Submitted' ? (
+                              <div className="text-center space-y-1 z-10 p-1">
+                                <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto" />
+                                <p className="text-[10px] text-emerald-400 font-extrabold font-mono leading-none">BEEP! INTAKE SUCCESS</p>
+                                <p className="text-[9px] text-white/95 leading-tight mt-1">Barcode cataloged. Updated to <span className="text-emerald-300 font-bold">Received at Vault</span>.</p>
+                                <button 
+                                  onClick={() => setScanSuccess(false)}
+                                  className="text-[9px] text-primary-fixed hover:underline font-bold mt-1"
+                                >
+                                  Scan Again
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center space-y-1 text-white/40 z-10 p-1">
+                                <Package className="w-6 h-6 mx-auto opacity-50" />
+                                <p className="text-[9px] text-white/60 font-medium">Camera Frame Live</p>
+                                <button 
+                                  onClick={handleTriggerDropoffScan}
+                                  className="px-2 py-1 bg-primary hover:bg-primary-container text-on-primary rounded-lg text-[9px] font-bold transition-all shadow-sm cursor-pointer"
+                                >
+                                  Simulate Drop-off Scan
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Corner frames */}
+                            <div className="absolute top-1.5 left-1.5 w-3 h-3 border-t-2 border-l-2 border-primary/50"></div>
+                            <div className="absolute top-1.5 right-1.5 w-3 h-3 border-t-2 border-r-2 border-primary/50"></div>
+                            <div className="absolute bottom-1.5 left-1.5 w-3 h-3 border-b-2 border-l-2 border-primary/50"></div>
+                            <div className="absolute bottom-1.5 right-1.5 w-3 h-3 border-b-2 border-r-2 border-primary/50"></div>
+                          </div>
+
+                          <div className="bg-white p-2 rounded-lg border border-outline-variant/10 text-[9px] text-on-surface-variant leading-relaxed">
+                            <strong>Note:</strong> Simulates field scanner. Promotes test-driven traversal of tracking points.
+                          </div>
                         </div>
                       </div>
 
@@ -760,6 +749,147 @@ export default function DonorDashboard({ needs, donations, onAddDonation, userSe
           </div>
         </div>
       </section>
+
+      {/* Beautiful Modal Overlay for Donation Submission */}
+      <AnimatePresence>
+        {isDonateModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDonateModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            
+            {/* Modal Box */}
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 15 }}
+              className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl p-6 border border-outline-variant/30 overflow-hidden z-10 max-h-[90vh] flex flex-col"
+            >
+              <div className="flex justify-between items-center pb-4 border-b border-outline-variant/20 flex-shrink-0">
+                <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-2">
+                  <Gift className="w-4.5 h-4.5 text-primary animate-bounce" />
+                  <span>Relief Contribution Ledger</span>
+                </h4>
+                <button 
+                  onClick={() => setIsDonateModalOpen(false)}
+                  className="p-1 rounded-full hover:bg-surface-container text-on-surface-variant cursor-pointer transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto py-4 flex-1 pr-1">
+                {successMsg && (
+                  <div className="p-3.5 mb-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs font-semibold text-emerald-800 leading-relaxed">{successMsg}</p>
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmitDonation} className="space-y-4 text-left">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">
+                      Relief Item Name *
+                    </label>
+                    <input 
+                      type="text" 
+                      required
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder="e.g. Infamil Infant Formula Pack, Winter Blankets"
+                      className="w-full p-2.5 text-xs bg-surface-container-low border border-outline-variant/50 rounded-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors font-semibold"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">
+                        Category *
+                      </label>
+                      <select 
+                        value={formCategory}
+                        onChange={(e) => setFormCategory(e.target.value)}
+                        className="w-full p-2.5 text-xs bg-surface-container-low border border-outline-variant/50 rounded-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors cursor-pointer font-semibold text-on-surface"
+                      >
+                        <option value="Food">Food / Nutrition</option>
+                        <option value="Clothing">Clothing / Apparel</option>
+                        <option value="Medical">Medical Supplies</option>
+                        <option value="Supply">General Supplies</option>
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">
+                          Quantity
+                        </label>
+                        <input 
+                          type="number" 
+                          min={1}
+                          required
+                          value={formQty}
+                          onChange={(e) => setFormQty(Number(e.target.value))}
+                          className="w-full p-2.5 text-xs bg-surface-container-low border border-outline-variant/50 rounded-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors font-mono font-bold text-on-surface"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">
+                          Unit
+                        </label>
+                        <input 
+                          type="text" 
+                          value={formUnit}
+                          onChange={(e) => setFormUnit(e.target.value)}
+                          placeholder="Packs, Units, Cases"
+                          className="w-full p-2.5 text-xs bg-surface-container-low border border-outline-variant/50 rounded-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors font-semibold text-on-surface"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">
+                      Description / Note
+                    </label>
+                    <textarea 
+                      rows={3}
+                      value={formDescription}
+                      onChange={(e) => setFormDescription(e.target.value)}
+                      placeholder="Specify size, expiration date guidance, package quantity detail, or sector designations."
+                      className="w-full p-2.5 text-xs bg-surface-container-low border border-outline-variant/50 rounded-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors font-medium resize-none text-on-surface"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">
+                      Expiration Date (Optional)
+                    </label>
+                    <input 
+                      type="date" 
+                      value={formExpiry}
+                      onChange={(e) => setFormExpiry(e.target.value)}
+                      className="w-full p-2.5 text-xs bg-surface-container-low border border-outline-variant/50 rounded-lg outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors font-semibold text-on-surface"
+                    />
+                  </div>
+
+                  <button 
+                    type="submit"
+                    className="w-full mt-4 bg-primary hover:bg-primary-container text-on-primary py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:-translate-y-0.5 active:scale-95 transition-all uppercase tracking-wider cursor-pointer"
+                  >
+                    <Gift className="w-4.5 h-4.5" />
+                    <span>Log Shipment to CareInventory</span>
+                  </button>
+                </form>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
