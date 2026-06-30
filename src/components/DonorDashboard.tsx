@@ -20,6 +20,40 @@ import {
 } from 'lucide-react';
 import { DonationItem, ChildNeed, UserSession } from '../types';
 
+const getNormalizedStatus = (rawStatus: string | undefined): string => {
+  if (!rawStatus) return 'Pending';
+  const s = rawStatus.toLowerCase().trim();
+  
+  if (s === 'received' || s === 'received_at_vault' || s === 'received at vault') {
+    return 'Received';
+  }
+  if (s === 'pending') {
+    return 'Pending';
+  }
+  if (s === 'sorted') {
+    return 'Sorted';
+  }
+  if (s === 'dispatched') {
+    return 'Dispatched';
+  }
+  
+  // Case-insensitive / substring checks to prevent any manual database entry typos
+  if (s.includes('received') || s.includes('vault')) {
+    return 'Received';
+  }
+  if (s.includes('pending')) {
+    return 'Pending';
+  }
+  if (s.includes('sort')) {
+    return 'Sorted';
+  }
+  if (s.includes('dispatch')) {
+    return 'Dispatched';
+  }
+  
+  return 'Pending';
+};
+
 interface DonorDashboardProps {
   needs: ChildNeed[];
   donations: DonationItem[];
@@ -638,7 +672,7 @@ export default function DonorDashboard({ needs, donations, onAddDonation, userSe
                             }
                           ].map((stepDef, idx) => {
                             const stepsOrder = ['Pending', 'Received', 'Sorted', 'Dispatched'];
-                            const currentStepIdx = stepsOrder.indexOf(trackResult.trackingStatus || 'Pending');
+                            const currentStepIdx = stepsOrder.indexOf(getNormalizedStatus(trackResult.trackingStatus));
                             const targetStepIdx = stepsOrder.indexOf(stepDef.step as any);
                             const isActive = targetStepIdx <= currentStepIdx;
 
