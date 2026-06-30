@@ -71,9 +71,9 @@ interface LoginProps {
 
 export default function Login({ onLoginSuccess }: LoginProps) {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
-  const [role, setRole] = useState<Role>('supervisor');
-  const [email, setEmail] = useState('manager@ngo.org');
-  const [password, setPassword] = useState('password123');
+  const [role, setRole] = useState<Role>('donor');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -95,19 +95,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
   }, [email, activeTab]);
 
-  // Auto-fill credentials depending on selected role
-  React.useEffect(() => {
-    if (activeTab === 'login') {
-      if (role === 'supervisor') {
-        setEmail('manager@ngo.org');
-      } else if (role === 'staff') {
-        setEmail('field.staff@ngo.org');
-      } else {
-        setEmail('donor@care.org');
-      }
-    }
-  }, [role, activeTab]);
-
   // When switching tabs, clear notifications and restrict role if registering
   React.useEffect(() => {
     setErrorMsg(null);
@@ -115,14 +102,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setShowPassword(false);
     setShowConfirmPassword(false);
     setShowVerificationSent(false);
-    if (activeTab === 'register') {
-      setRole('donor');
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
-    } else {
-      setRole('supervisor');
-    }
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+    setRole('donor');
   }, [activeTab]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -142,14 +125,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           return;
         }
 
-        // 2. Reject login attempt if user selects Staff/Supervisor but their database record indicates they are a 'donor'
-        if ((role === 'supervisor' || role === 'staff') && dbUser.role === 'donor') {
-          setErrorMsg("Unauthorized Access: Your account is registered as a Donor. You cannot access staff panels.");
-          setIsSubmitting(false);
-          return;
-        }
-
-        // 3. For Donor Role, enforce Firebase Authentication and Email Verification
+        // 2. Authenticate based on user's registered role in the database
         if (dbUser.role === 'donor') {
           try {
             // Sign in with Firebase Auth
@@ -180,7 +156,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             return;
           }
         } else {
-          // For supervisor/staff (pre-seeded credentials), check password directly
+          // For supervisor/manager/staff (pre-seeded credentials), check password directly
           if (dbUser.password && dbUser.password !== password) {
             setErrorMsg("Invalid password. Please try again.");
             setIsSubmitting(false);
@@ -198,9 +174,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
         onLoginSuccess(session);
       } else {
-        // 4. Restrict account registration on the public signup page to the 'donor' role only
+        // Registration is strictly Donor-only
         if (role !== 'donor') {
-          setErrorMsg("Registration Restricted: Only Donor accounts can register publicly. Staff & Supervisor accounts must be pre-configured.");
+          setErrorMsg("Registration Restricted: Public accounts can only register as Donors.");
           setIsSubmitting(false);
           return;
         }
@@ -478,63 +454,18 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   </div>
                 )}
 
-                {/* Role Selection */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block">I am a...</label>
-                  {activeTab === 'register' ? (
+                {/* Registration Informational Banner */}
+                {activeTab === 'register' && (
+                  <div className="space-y-2">
                     <div className="p-4 border border-dashed border-primary/40 rounded-xl flex flex-col items-center gap-2 bg-primary/5">
                       <Heart className="w-5 h-5 text-primary" />
                       <span className="text-[10px] font-bold text-center uppercase tracking-wider text-primary">Public Donor Registration</span>
                       <p className="text-[9px] text-on-surface-variant text-center leading-normal max-w-xs">
-                        Account creation on this portal is strictly limited to **Donors**. Staff and Supervisor roles are pre-configured in the database and cannot be self-registered.
+                        Account creation on this portal is strictly limited to **Donors**. Staff, Supervisor, and Manager roles are pre-configured in the database and cannot be self-registered publicly.
                       </p>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-2">
-                      {/* Supervisor Card */}
-                      <div 
-                        id="role-supervisor"
-                        onClick={() => setRole('supervisor')}
-                        className={`p-2.5 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${
-                          role === 'supervisor' 
-                            ? 'border-primary bg-primary-fixed/20 shadow-sm' 
-                            : 'border-outline-variant bg-surface-container-low hover:border-primary/50'
-                        }`}
-                      >
-                        <UserCheck className={`w-4 h-4 ${role === 'supervisor' ? 'text-primary' : 'text-on-surface-variant'}`} />
-                        <span className="text-[9px] font-bold text-center uppercase tracking-wider leading-tight">Supervisor</span>
-                      </div>
-                      
-                      {/* Staff Card */}
-                      <div 
-                        id="role-staff"
-                        onClick={() => setRole('staff')}
-                        className={`p-2.5 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${
-                          role === 'staff' 
-                            ? 'border-primary bg-primary-fixed/20 shadow-sm' 
-                            : 'border-outline-variant bg-surface-container-low hover:border-primary/50'
-                        }`}
-                      >
-                        <User className={`w-4 h-4 ${role === 'staff' ? 'text-primary' : 'text-on-surface-variant'}`} />
-                        <span className="text-[9px] font-bold text-center uppercase tracking-wider leading-tight">Staff</span>
-                      </div>
-
-                      {/* Donor Card */}
-                      <div 
-                        id="role-donor"
-                        onClick={() => setRole('donor')}
-                        className={`p-2.5 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${
-                          role === 'donor' 
-                            ? 'border-primary bg-primary-fixed/20 shadow-sm' 
-                            : 'border-outline-variant bg-surface-container-low hover:border-primary/50'
-                        }`}
-                      >
-                        <Heart className={`w-4 h-4 ${role === 'donor' ? 'text-primary' : 'text-on-surface-variant'}`} />
-                        <span className="text-[9px] font-bold text-center uppercase tracking-wider leading-tight">Donor / Public</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Input Fields */}
                 <div className="space-y-3">
@@ -577,13 +508,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         type="email" 
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder={
-                          role === 'supervisor' 
-                            ? 'manager@ngo.org' 
-                            : role === 'staff' 
-                              ? 'field.staff@ngo.org' 
-                              : 'donor@care.org'
-                        } 
+                        placeholder="e.g. donor@care.org" 
                         required
                         disabled={isSubmitting}
                       />

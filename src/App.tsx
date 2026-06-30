@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Baby, 
@@ -62,6 +62,29 @@ export default function App() {
   });
 
   const [isLoadingLive, setIsLoadingLive] = useState(true);
+
+  // Dynamic reactive projections: when inventory stock quantity is 0,
+  // instantly populate a priority/urgent request in the needs pipeline.
+  const projectedNeeds = useMemo(() => {
+    const list = [...needs];
+    inventoryStock.forEach(stockItem => {
+      if (stockItem.qty === 0) {
+        const exists = list.some(n => n.title.toLowerCase().trim() === stockItem.name.toLowerCase().trim());
+        if (!exists) {
+          list.push({
+            id: `URG-${stockItem.id.toUpperCase()}`,
+            title: stockItem.name,
+            priority: 'Urgent',
+            age: 'All Brackets',
+            quantity: 30,
+            matchingStatus: 'Needs Procurement',
+            statusDetails: `STOCK LEVEL DEPLETED TO 0: Automatic warning trigger in field logistics pipeline.`
+          });
+        }
+      }
+    });
+    return list;
+  }, [needs, inventoryStock]);
 
   // Fetch from Firebase on Mount
   useEffect(() => {
@@ -419,6 +442,8 @@ export default function App() {
     return <Login onLoginSuccess={handleLogin} />;
   }
 
+  const isManagerOrSupervisor = userSession.role === 'supervisor' || userSession.role === 'manager';
+
   // Filtered donations for the top-bar instant search
   const searchedDonations = searchVal.trim() 
     ? donations.filter(d => d.name.toLowerCase().includes(searchVal.toLowerCase()))
@@ -437,60 +462,6 @@ export default function App() {
           <div>
             <h1 className="text-sm font-extrabold tracking-tight text-primary uppercase">CareInventory</h1>
             <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Resource Management</p>
-          </div>
-        </div>
-
-        {/* Role Portal Switcher Widget */}
-        <div className="px-4 mb-4">
-          <div className="p-3 bg-surface-container-low border border-outline-variant/30 rounded-2xl space-y-2">
-            <p className="text-[9px] font-extrabold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-primary animate-pulse" />
-              <span>Portal Switcher (Review Mode)</span>
-            </p>
-            <div className="grid grid-cols-1 gap-1 text-[11px]">
-              <button 
-                onClick={() => {
-                  setUserSession(prev => prev ? { ...prev, role: 'donor', title: 'Generous Donor' } : null);
-                  setActiveScreen('overview');
-                }}
-                className={`w-full py-1.5 px-3 rounded-lg font-bold text-left transition-all cursor-pointer flex items-center gap-1.5 ${
-                  userSession.role === 'donor' 
-                    ? 'bg-primary text-white shadow-sm font-extrabold scale-[1.02]' 
-                    : 'text-on-surface hover:bg-surface-container-high'
-                }`}
-              >
-                <div className={`w-1.5 h-1.5 rounded-full ${userSession.role === 'donor' ? 'bg-white' : 'bg-amber-500 animate-pulse'}`}></div>
-                <span>Donor Portal View</span>
-              </button>
-              <button 
-                onClick={() => {
-                  setUserSession(prev => prev ? { ...prev, role: 'staff', title: 'Warehouse Logistics Pro' } : null);
-                  setActiveScreen('scanner');
-                }}
-                className={`w-full py-1.5 px-3 rounded-lg font-bold text-left transition-all cursor-pointer flex items-center gap-1.5 ${
-                  userSession.role === 'staff' 
-                    ? 'bg-primary text-white shadow-sm font-extrabold scale-[1.02]' 
-                    : 'text-on-surface hover:bg-surface-container-high'
-                }`}
-              >
-                <div className={`w-1.5 h-1.5 rounded-full ${userSession.role === 'staff' ? 'bg-white' : 'bg-blue-500 animate-pulse'}`}></div>
-                <span>Staff Operational View</span>
-              </button>
-              <button 
-                onClick={() => {
-                  setUserSession(prev => prev ? { ...prev, role: 'supervisor', title: 'Lead Operations Supervisor' } : null);
-                  setActiveScreen('overview');
-                }}
-                className={`w-full py-1.5 px-3 rounded-lg font-bold text-left transition-all cursor-pointer flex items-center gap-1.5 ${
-                  userSession.role === 'supervisor' 
-                    ? 'bg-primary text-white shadow-sm font-extrabold scale-[1.02]' 
-                    : 'text-on-surface hover:bg-surface-container-high'
-                }`}
-              >
-                <div className={`w-1.5 h-1.5 rounded-full ${userSession.role === 'supervisor' ? 'bg-white' : 'bg-emerald-500 animate-pulse'}`}></div>
-                <span>Manager Analytics Panel</span>
-              </button>
-            </div>
           </div>
         </div>
 
@@ -542,7 +513,7 @@ export default function App() {
             </>
           )}
 
-          {userSession.role === 'supervisor' && (
+          {isManagerOrSupervisor && (
             <button 
               onClick={() => { setActiveScreen('reports'); setIsMobileMenuOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -759,63 +730,6 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Role Portal Switcher Widget */}
-                <div className="px-4 mb-4">
-                  <div className="p-3 bg-surface-container-low border border-outline-variant/30 rounded-xl space-y-2">
-                    <p className="text-[9px] font-extrabold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-primary animate-pulse" />
-                      <span>Portal Switcher (Review)</span>
-                    </p>
-                    <div className="grid grid-cols-1 gap-1 text-[11px]">
-                      <button 
-                        onClick={() => {
-                          setUserSession(prev => prev ? { ...prev, role: 'donor', title: 'Generous Donor' } : null);
-                          setActiveScreen('overview');
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full py-1.5 px-3 rounded-lg font-bold text-left transition-all cursor-pointer flex items-center gap-1.5 ${
-                          userSession.role === 'donor' 
-                            ? 'bg-primary text-white shadow-sm font-extrabold' 
-                            : 'text-on-surface hover:bg-surface-container-high'
-                        }`}
-                      >
-                        <div className={`w-1.5 h-1.5 rounded-full ${userSession.role === 'donor' ? 'bg-white' : 'bg-amber-500'}`}></div>
-                        <span>Donor Portal View</span>
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setUserSession(prev => prev ? { ...prev, role: 'staff', title: 'Warehouse Logistics Pro' } : null);
-                          setActiveScreen('scanner');
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full py-1.5 px-3 rounded-lg font-bold text-left transition-all cursor-pointer flex items-center gap-1.5 ${
-                          userSession.role === 'staff' 
-                            ? 'bg-primary text-white shadow-sm font-extrabold' 
-                            : 'text-on-surface hover:bg-surface-container-high'
-                        }`}
-                      >
-                        <div className={`w-1.5 h-1.5 rounded-full ${userSession.role === 'staff' ? 'bg-white' : 'bg-blue-500'}`}></div>
-                        <span>Staff Operational View</span>
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setUserSession(prev => prev ? { ...prev, role: 'supervisor', title: 'Lead Operations Supervisor' } : null);
-                          setActiveScreen('overview');
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full py-1.5 px-3 rounded-lg font-bold text-left transition-all cursor-pointer flex items-center gap-1.5 ${
-                          userSession.role === 'supervisor' 
-                            ? 'bg-primary text-white shadow-sm font-extrabold' 
-                            : 'text-on-surface hover:bg-surface-container-high'
-                        }`}
-                      >
-                        <div className={`w-1.5 h-1.5 rounded-full ${userSession.role === 'supervisor' ? 'bg-white' : 'bg-emerald-500'}`}></div>
-                        <span>Manager Analytics Panel</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
                 <nav className="flex-1 px-4 space-y-1">
                   <button 
                     onClick={() => { setActiveScreen('overview'); setIsMobileMenuOpen(false); }}
@@ -863,7 +777,7 @@ export default function App() {
                     </>
                   )}
 
-                  {userSession.role === 'supervisor' && (
+                  {isManagerOrSupervisor && (
                     <button 
                       onClick={() => { setActiveScreen('reports'); setIsMobileMenuOpen(false); }}
                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -914,7 +828,7 @@ export default function App() {
               {activeScreen === 'overview' && (
                 userSession.role === 'donor' ? (
                   <DonorDashboard 
-                    needs={needs}
+                    needs={projectedNeeds}
                     donations={donations}
                     onAddDonation={handleAddDonation}
                     userSession={userSession}
@@ -924,7 +838,7 @@ export default function App() {
                 ) : (
                   <SupervisorDashboard 
                     donations={donations} 
-                    needs={needs} 
+                    needs={projectedNeeds} 
                     inventoryStock={inventoryStock}
                     userRole={userSession.role}
                     onUpdateInventoryStockQty={handleUpdateInventoryStockQty}
@@ -950,7 +864,7 @@ export default function App() {
               )}
 
               {activeScreen === 'reports' && (
-                userSession.role !== 'supervisor' ? (
+                !isManagerOrSupervisor ? (
                   <div className="flex flex-col items-center justify-center py-20 bg-white border border-outline-variant/30 rounded-xl shadow-sm text-center px-4">
                     <Lock className="w-12 h-12 text-error mb-4 animate-bounce" />
                     <h3 className="text-sm font-bold text-on-surface uppercase tracking-wider">Access Denied</h3>
@@ -961,7 +875,7 @@ export default function App() {
                 ) : (
                   <ImpactReports 
                     donations={donations} 
-                    needs={needs} 
+                    needs={projectedNeeds} 
                     logs={logs} 
                     userName={userSession.name} 
                   />
