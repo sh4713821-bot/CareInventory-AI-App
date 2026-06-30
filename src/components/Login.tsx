@@ -205,6 +205,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           return;
         }
 
+        // Exact Match Blacklist
+        const exactBlacklist = ['abc@gmail.com', 'test@gmail.com', 'xyz@gmail.com', 'admin@gmail.com'];
+        if (exactBlacklist.includes(email.toLowerCase().trim())) {
+          setErrorMsg("This email is blacklisted. Please enter a genuine active email address.");
+          setIsSubmitting(false);
+          return;
+        }
+
         // 5. Frontend Fake Email Detection
         if (isFakeEmail(email)) {
           setErrorMsg("Please enter a valid, active email address");
@@ -253,9 +261,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         // Send Email Verification with robust error handling
         if (authUser) {
           try {
+            // Ensure auth instance is fully initialized
+            if (!auth || !auth.app) {
+              throw new Error("Firebase Auth is not fully initialized. Check your firebaseConfig setup.");
+            }
             await sendEmailVerification(authUser);
+            alert("Verification email triggered!");
           } catch (verificationErr: any) {
             console.error("Failed to send verification email:", verificationErr);
+            alert("Firebase Error: " + (verificationErr.message || "Unknown error"));
             setErrorMsg(`Verification Email Error: ${verificationErr.message || "Unable to send verification link. Please try again."}`);
             
             // Clean up the created auth user so they are not left hanging in a bad unverified state
