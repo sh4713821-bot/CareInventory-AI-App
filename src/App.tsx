@@ -498,19 +498,21 @@ export default function App() {
                 <HeartHandshake className="w-4 h-4 text-outline" />
                 <span className="uppercase tracking-wider">Child Needs</span>
               </button>
-
-              <button 
-                onClick={() => { setActiveScreen('scanner'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  activeScreen === 'scanner' 
-                    ? 'text-primary bg-primary-fixed/30 shadow-sm' 
-                    : 'text-on-surface-variant hover:bg-surface-container'
-                }`}
-              >
-                <Camera className="w-4 h-4" />
-                <span className="uppercase tracking-wider">AI Scanner</span>
-              </button>
             </>
+          )}
+
+          {userSession.role === 'staff' && (
+            <button 
+              onClick={() => { setActiveScreen('scanner'); setIsMobileMenuOpen(false); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeScreen === 'scanner' 
+                  ? 'text-primary bg-primary-fixed/30 shadow-sm' 
+                  : 'text-on-surface-variant hover:bg-surface-container'
+              }`}
+            >
+              <Camera className="w-4 h-4" />
+              <span className="uppercase tracking-wider">AI Scanner</span>
+            </button>
           )}
 
           {isManagerOrSupervisor && (
@@ -762,19 +764,21 @@ export default function App() {
                         <HeartHandshake className="w-4 h-4" />
                         <span className="uppercase tracking-wider">Child Needs</span>
                       </button>
-
-                      <button 
-                        onClick={() => { setActiveScreen('scanner'); setIsMobileMenuOpen(false); }}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          activeScreen === 'scanner' 
-                            ? 'text-primary bg-primary-fixed/30' 
-                            : 'text-on-surface-variant hover:bg-surface-container'
-                        }`}
-                      >
-                        <Camera className="w-4 h-4" />
-                        <span className="uppercase tracking-wider">AI Scanner</span>
-                      </button>
                     </>
+                  )}
+
+                  {userSession.role === 'staff' && (
+                    <button 
+                      onClick={() => { setActiveScreen('scanner'); setIsMobileMenuOpen(false); }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        activeScreen === 'scanner' 
+                          ? 'text-primary bg-primary-fixed/30' 
+                          : 'text-on-surface-variant hover:bg-surface-container'
+                      }`}
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span className="uppercase tracking-wider">AI Scanner</span>
+                    </button>
                   )}
 
                   {isManagerOrSupervisor && (
