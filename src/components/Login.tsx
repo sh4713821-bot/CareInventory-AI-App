@@ -18,7 +18,9 @@ import { fetchUserByEmail, registerUser } from '../firebaseService';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
-  sendEmailVerification 
+  sendEmailVerification,
+  setPersistence,
+  browserSessionPersistence
 } from 'firebase/auth';
 import { auth } from '../firebase';
 
@@ -108,6 +110,36 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setRole('donor');
   }, [activeTab]);
 
+  // Dynamic Verification Polling Listener: checks status when Verification Screen is shown
+  React.useEffect(() => {
+    let intervalId: any;
+    if (showVerificationSent) {
+      intervalId = setInterval(async () => {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          try {
+            await currentUser.reload();
+            if (auth.currentUser?.emailVerified) {
+              const session: UserSession = {
+                name: name.trim() || 'Community Donor',
+                role: 'donor',
+                title: 'Community Donor',
+                avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name.trim() || 'Donor')}`
+              };
+              clearInterval(intervalId);
+              onLoginSuccess(session);
+            }
+          } catch (reloadErr) {
+            console.error("Error polling user email verification state:", reloadErr);
+          }
+        }
+      }, 2500);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [showVerificationSent, name, onLoginSuccess]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -115,8 +147,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setIsSubmitting(true);
 
     try {
+      // 1. Enforce browser session persistence strictly
+      await setPersistence(auth, browserSessionPersistence);
+
       if (activeTab === 'login') {
-        // 1. Query user document in Firestore users collection
+        // Query user document in Firestore users collection
         const dbUser = await fetchUserByEmail(email);
 
         if (!dbUser) {
@@ -242,10 +277,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               throw new Error("Firebase Auth is not fully initialized. Check your firebaseConfig setup.");
             }
             await sendEmailVerification(authUser);
-            alert("Verification email triggered!");
+            console.log("Verification email triggered successfully.");
           } catch (verificationErr: any) {
             console.error("Failed to send verification email:", verificationErr);
-            alert("Firebase Error: " + (verificationErr.message || "Unknown error"));
             setErrorMsg(`Verification Email Error: ${verificationErr.message || "Unable to send verification link. Please try again."}`);
             
             // Clean up the created auth user so they are not left hanging in a bad unverified state
@@ -272,14 +306,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
         await registerUser(newDbUser);
 
-        // Sign out newly registered user so they aren't authenticated until verified
-        try {
-          await auth.signOut();
-        } catch (signOutErr) {
-          console.error("Error signing out after registration:", signOutErr);
-        }
-
-        setSuccessMsg("Registration successful! A verification email has been sent to your inbox.");
+        setSuccessMsg("Registration successful! A verification email has been sent to your inbox. The portal will automatically log you in once you verify.");
         setShowVerificationSent(true);
         setPassword('');
         setConfirmPassword('');
