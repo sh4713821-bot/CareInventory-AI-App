@@ -87,19 +87,61 @@ export default function DonorDashboard({
   const handleDownloadReceipt = (item: DonationItem) => {
     const doc = new jsPDF();
     
+    // Create temporary circular canvas-drawn care icon
+    const canvas = document.createElement('canvas');
+    canvas.width = 120;
+    canvas.height = 120;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      // Draw circular background (dark blue theme matching care branding)
+      ctx.fillStyle = '#1e3a8a';
+      ctx.beginPath();
+      ctx.arc(60, 60, 50, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Draw light blue metallic inner accent border
+      ctx.strokeStyle = '#60a5fa';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(60, 60, 44, 0, 2 * Math.PI);
+      ctx.stroke();
+
+      // Draw premium white heart logo in center
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(60, 44);
+      ctx.bezierCurveTo(60, 41, 52, 32, 42, 32);
+      ctx.bezierCurveTo(28, 32, 28, 50, 28, 50);
+      ctx.bezierCurveTo(28, 66, 48, 82, 60, 92);
+      ctx.bezierCurveTo(72, 82, 92, 66, 92, 50);
+      ctx.bezierCurveTo(92, 50, 92, 32, 78, 32);
+      ctx.bezierCurveTo(68, 32, 60, 41, 60, 44);
+      ctx.closePath();
+      ctx.fill();
+    }
+    const logoDataUrl = canvas.toDataURL('image/png');
+
     // Corporate header/branding bar
     doc.setFillColor(30, 58, 138); // Dark corporate blue
     doc.rect(0, 0, 210, 8, 'F');
     
+    // Top logo injection
+    doc.addImage(logoDataUrl, 'PNG', 14, 11, 14, 14);
+
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
+    doc.setFontSize(11);
     doc.setTextColor(30, 58, 138);
-    doc.text("CAREINVENTORY RESOURCE MANAGEMENT - OFFICIAL DONATION RECEIPT", 14, 22);
+    doc.text("CAREINVENTORY RESOURCE MANAGEMENT", 32, 17);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text("OFFICIAL DONATION RECEIPT", 32, 22);
     
     // Divider rule
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.5);
-    doc.line(14, 26, 196, 26);
+    doc.line(14, 28, 196, 28);
     
     const donorEmail = `${userSession.name.toLowerCase().replace(/\s+/g, '')}@care.org`;
     const todayStr = new Date().toLocaleDateString('en-US', {
@@ -121,7 +163,7 @@ export default function DonorDashboard({
     ];
     
     autoTable(doc, {
-      startY: 32,
+      startY: 34,
       head: [tableData[0]],
       body: tableData.slice(1),
       theme: 'grid',
@@ -142,7 +184,7 @@ export default function DonorDashboard({
     doc.text("Authorized Signature: CareInventory Logistics Officer", 14, finalY + 12);
     doc.line(14, finalY + 18, 100, finalY + 18);
     
-    // Split the thank-you message to ensure it doesn't overflow and center-align it
+    // Prominent bold centered thank-you message
     const thankYouMessage = "Thank you for your generous support in managing healthcare and community resources efficiently.";
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
