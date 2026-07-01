@@ -14,7 +14,8 @@ import {
   Plus,
   X,
   CheckCircle2,
-  MoreVertical
+  MoreVertical,
+  RefreshCw
 } from 'lucide-react';
 import { DonationItem, ChildNeed, InventoryStockItem } from '../types';
 
@@ -26,7 +27,7 @@ interface SupervisorDashboardProps {
   onUpdateInventoryStockQty: (id: string, qty: number) => void;
   onAddDonation: (item: Omit<DonationItem, 'id'>) => void;
   onProcureNeed: (id: string) => void;
-  onUpdateTrackingStatus?: (id: string, status: 'Pending' | 'Received' | 'Sorted' | 'Dispatched') => void;
+  onUpdateTrackingStatus?: (id: string, status: 'Pending' | 'Received' | 'Sorted' | 'Dispatched') => Promise<void> | void;
 }
 
 export default function SupervisorDashboard({ 
@@ -45,6 +46,10 @@ export default function SupervisorDashboard({
   const [selectedItemActionMenu, setSelectedItemActionMenu] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'vault' | 'stock'>('vault');
 
+  // Multi-select state option for Batch Dispatch and Auto-save
+  const [selectedDonationIds, setSelectedDonationIds] = useState<string[]>([]);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+
   // New Item Form State
   const [newForm, setNewForm] = useState({
     name: '',
@@ -54,6 +59,47 @@ export default function SupervisorDashboard({
     expiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days ahead
     status: 'Optimal' as DonationItem['status']
   });
+
+  const handleToggleSelection = (id: string) => {
+    setSelectedDonationIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAll = (filteredIds: string[]) => {
+    const isAllSelected = filteredIds.length > 0 && filteredIds.every(id => selectedDonationIds.includes(id));
+    if (isAllSelected) {
+      setSelectedDonationIds(prev => prev.filter(id => !filteredIds.includes(id)));
+    } else {
+      setSelectedDonationIds(prev => {
+        const newSelections = [...prev];
+        filteredIds.forEach(id => {
+          if (!newSelections.includes(id)) {
+            newSelections.push(id);
+          }
+        });
+        return newSelections;
+      });
+    }
+  };
+
+  const handleBatchUpdateStatus = async (newStatus: 'Pending' | 'Received' | 'Sorted' | 'Dispatched') => {
+    setIsBatchProcessing(true);
+    try {
+      await Promise.all(
+        selectedDonationIds.map(async (id) => {
+          if (onUpdateTrackingStatus) {
+            await onUpdateTrackingStatus(id, newStatus);
+          }
+        })
+      );
+      setSelectedDonationIds([]);
+    } catch (error) {
+      console.error("Batch status update failed:", error);
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -276,10 +322,62 @@ export default function SupervisorDashboard({
               </div>
             </div>
             
+            {/* Batch update control panel */}
+            {selectedDonationIds.length > 0 && (
+              <div className="bg-primary/5 border-b border-primary/20 px-5 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
+                <span className="text-xs font-bold text-primary">
+                  Selected {selectedDonationIds.length} donation{selectedDonationIds.length > 1 ? 's' : ''} for batch action
+                </span>
+                <div className="flex items-center gap-2">
+                  {isBatchProcessing ? (
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Processing batch...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <button 
+                        onClick={() => handleBatchUpdateStatus('Received')}
+                        className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-wider transition-colors cursor-pointer shadow-sm"
+                      >
+                        Mark Received
+                      </button>
+                      <button 
+                        onClick={() => handleBatchUpdateStatus('Sorted')}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-wider transition-colors cursor-pointer shadow-sm"
+                      >
+                        Mark Sorted
+                      </button>
+                      <button 
+                        onClick={() => handleBatchUpdateStatus('Dispatched')}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-wider transition-colors cursor-pointer shadow-sm"
+                      >
+                        Dispatch Selected
+                      </button>
+                      <button 
+                        onClick={() => setSelectedDonationIds([])}
+                        className="bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant font-bold px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+            
             <div className="overflow-x-auto min-h-[300px]">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-surface-container-low/40">
+                    <th className="px-3 py-3 w-12 text-center border-b border-outline-variant/30">
+                      <input 
+                        type="checkbox"
+                        checked={filteredDonations.length > 0 && filteredDonations.every(d => selectedDonationIds.includes(d.id))}
+                        onChange={() => handleToggleSelectAll(filteredDonations.map(d => d.id))}
+                        className="rounded border-outline-variant text-primary focus:ring-primary w-3.5 h-3.5 cursor-pointer"
+                      />
+                    </th>
                     <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/30">Item Name</th>
                     <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/30">Category</th>
                     <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/30 text-center">Qty</th>
@@ -292,6 +390,14 @@ export default function SupervisorDashboard({
                   {filteredDonations.length > 0 ? (
                     filteredDonations.map((item) => (
                       <tr key={item.id} className="hover:bg-surface-container-low/30 transition-colors group">
+                        <td className="px-3 py-3 text-center border-b border-outline-variant/10">
+                          <input 
+                            type="checkbox"
+                            checked={selectedDonationIds.includes(item.id)}
+                            onChange={() => handleToggleSelection(item.id)}
+                            className="rounded border-outline-variant text-primary focus:ring-primary w-3.5 h-3.5 cursor-pointer"
+                          />
+                        </td>
                         <td className="px-5 py-3">
                           <div className="flex flex-col">
                             <span className="text-xs font-semibold text-on-surface">{item.name}</span>

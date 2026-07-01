@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { DonationItem, ChildNeed, UserSession } from '../types';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 const getNormalizedStatus = (rawStatus: string | undefined): string => {
   if (!rawStatus) return 'Submitted';
@@ -120,21 +120,20 @@ export default function DonorDashboard({
       ["Inspection Status", item.status || "Optimal"]
     ];
     
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 32,
       head: [tableData[0]],
       body: tableData.slice(1),
       theme: 'grid',
       headStyles: { fillColor: [30, 58, 138], textColor: [255, 255, 255], fontSize: 10, fontStyle: 'bold' },
-      styles: { fontSize: 9, cellPadding: 5, font: 'helvetica' },
+      styles: { fontSize: 9, cellPadding: 5, font: 'helvetica', lineColor: [226, 232, 240] },
       columnStyles: {
         0: { fontStyle: 'bold', textColor: [71, 85, 105], cellWidth: 55 },
         1: { textColor: [15, 23, 42] }
-      },
-      gridLineColor: [226, 232, 240]
+      }
     });
     
-    const finalY = (doc as any).lastAutoTable.finalY || 100;
+    const finalY = (doc as any).lastAutoTable?.finalY || 100;
     
     // Add authorized signature block
     doc.setFont("helvetica", "normal");
@@ -525,7 +524,7 @@ export default function DonorDashboard({
                               </td>
                               <td className="p-3.5">
                                 <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3">
-                                  {(status === 'Received' || status === 'Completed' || status === 'Sorted' || status === 'Dispatched') && (
+                                  {['received', 'sorted', 'dispatched', 'despatched', 'completed'].includes(status.toLowerCase()) && (
                                     <button 
                                       onClick={() => handleDownloadReceipt(item)}
                                       className="text-emerald-600 hover:text-emerald-700 font-extrabold flex items-center gap-1.5 text-[11px] uppercase tracking-wider cursor-pointer"

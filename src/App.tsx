@@ -36,7 +36,8 @@ import {
   saveAuditLog,
   fetchInventoryStock,
   saveInventoryStockItem,
-  INITIAL_STOCK
+  INITIAL_STOCK,
+  updateDonationStatus
 } from './firebaseService';
 
 export default function App() {
@@ -238,7 +239,7 @@ export default function App() {
     if (updatedItem) {
       try {
         await Promise.all([
-          saveDonationItem(updatedItem),
+          updateDonationStatus(itemId, newStatus),
           saveAuditLog(newLog)
         ]);
       } catch (err) {

@@ -285,6 +285,19 @@ export async function saveDonationItem(item: DonationItem): Promise<void> {
   }
 }
 
+// Update a donation tracking status via updateDoc
+export async function updateDonationStatus(itemId: string, status: 'Pending' | 'Received' | 'Sorted' | 'Dispatched'): Promise<void> {
+  try {
+    const docId = itemId.replace("#", "REG-");
+    const docRef = doc(db, DONATIONS_COL, docId);
+    await updateDoc(docRef, { trackingStatus: status });
+    console.log(`[FIRESTORE] Hard updateDoc successful for ${itemId} status -> ${status}`);
+  } catch (error) {
+    console.error(`Error updating tracking status via updateDoc for ${itemId}:`, error);
+    throw error;
+  }
+}
+
 // Save or Update a child need in Firestore
 export async function saveNeedItem(need: ChildNeed): Promise<void> {
   try {
