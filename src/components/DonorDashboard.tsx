@@ -20,9 +20,12 @@ import {
   X,
   Plus,
   RefreshCw,
-  Camera
+  Camera,
+  FileText
 } from 'lucide-react';
 import { DonationItem, ChildNeed, UserSession } from '../types';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 const getNormalizedStatus = (rawStatus: string | undefined): string => {
   if (!rawStatus) return 'Submitted';
@@ -79,6 +82,74 @@ export default function DonorDashboard({
 }: DonorDashboardProps) {
   // Navigation within Donor Dashboard
   const [activeTab, setActiveTab] = useState<'needs' | 'donate' | 'history' | 'track'>('needs');
+
+  // PDF Receipt Generator Feature
+  const handleDownloadReceipt = (item: DonationItem) => {
+    const doc = new jsPDF();
+    
+    // Corporate header/branding bar
+    doc.setFillColor(30, 58, 138); // Dark corporate blue
+    doc.rect(0, 0, 210, 8, 'F');
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(30, 58, 138);
+    doc.text("CAREINVENTORY RESOURCE MANAGEMENT - OFFICIAL DONATION RECEIPT", 14, 22);
+    
+    // Divider rule
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.5);
+    doc.line(14, 26, 196, 26);
+    
+    const donorEmail = `${userSession.name.toLowerCase().replace(/\s+/g, '')}@care.org`;
+    const todayStr = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    const tableData = [
+      ["Receipt Field", "Information Details"],
+      ["Unique Donation ID", item.id],
+      ["Receipt Date", todayStr],
+      ["Donor Name", item.donorName || userSession.name],
+      ["Donor Email", donorEmail],
+      ["Item Name", item.name],
+      ["Category", item.category],
+      ["Quantity Approved", `${item.qty} ${item.unit}`],
+      ["Inspection Status", item.status || "Optimal"]
+    ];
+    
+    (doc as any).autoTable({
+      startY: 32,
+      head: [tableData[0]],
+      body: tableData.slice(1),
+      theme: 'grid',
+      headStyles: { fillColor: [30, 58, 138], textColor: [255, 255, 255], fontSize: 10, fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 5, font: 'helvetica' },
+      columnStyles: {
+        0: { fontStyle: 'bold', textColor: [71, 85, 105], cellWidth: 55 },
+        1: { textColor: [15, 23, 42] }
+      },
+      gridLineColor: [226, 232, 240]
+    });
+    
+    const finalY = (doc as any).lastAutoTable.finalY || 100;
+    
+    // Add authorized signature block
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Authorized Signature: CareInventory Logistics Officer", 14, finalY + 12);
+    doc.line(14, finalY + 18, 100, finalY + 18);
+    
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(10);
+    doc.setTextColor(30, 58, 138);
+    doc.text("Thank you for your generous support.", 14, finalY + 28);
+    
+    doc.save(`Donation_Receipt_${item.id.replace('#', '')}.pdf`);
+  };
   
   // Track Donation State
   const [trackId, setTrackId] = useState('');
@@ -428,7 +499,7 @@ export default function DonorDashboard({
                       </thead>
                       <tbody className="divide-y divide-outline-variant/10 text-xs text-on-surface">
                         {personalHistory.map(item => {
-                          const status = item.trackingStatus || 'Pending';
+                          const status = (item.trackingStatus || 'Pending') as string;
                           return (
                             <tr key={item.id} className="hover:bg-surface-container-low/30 transition-colors">
                               <td className="p-3.5 font-bold font-mono text-primary select-all">{item.id}</td>
@@ -452,18 +523,30 @@ export default function DonorDashboard({
                                   <span>{status}</span>
                                 </span>
                               </td>
-                              <td className="p-3.5 text-right">
-                                <button 
-                                  onClick={() => {
-                                    setTrackId(item.id);
-                                    handleTrackDonation(item.id);
-                                    setActiveTab('track');
-                                  }}
-                                  className="text-primary hover:text-primary-container font-extrabold flex items-center gap-0.5 ml-auto text-[11px] uppercase tracking-wider"
-                                >
-                                  <span>Track Package</span>
-                                  <ArrowRight className="w-3 h-3" />
-                                </button>
+                              <td className="p-3.5">
+                                <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3">
+                                  {(status === 'Received' || status === 'Completed' || status === 'Sorted' || status === 'Dispatched') && (
+                                    <button 
+                                      onClick={() => handleDownloadReceipt(item)}
+                                      className="text-emerald-600 hover:text-emerald-700 font-extrabold flex items-center gap-1.5 text-[11px] uppercase tracking-wider cursor-pointer"
+                                      title="Download official PDF receipt"
+                                    >
+                                      <FileText className="w-3.5 h-3.5" />
+                                      <span>Download Receipt</span>
+                                    </button>
+                                  )}
+                                  <button 
+                                    onClick={() => {
+                                      setTrackId(item.id);
+                                      handleTrackDonation(item.id);
+                                      setActiveTab('track');
+                                    }}
+                                    className="text-primary hover:text-primary-container font-extrabold flex items-center gap-0.5 text-[11px] uppercase tracking-wider cursor-pointer"
+                                  >
+                                    <span>Track Package</span>
+                                    <ArrowRight className="w-3 h-3" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );

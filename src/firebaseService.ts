@@ -201,6 +201,25 @@ export async function fetchInventoryStock(): Promise<InventoryStockItem[]> {
 export async function saveInventoryStockItem(item: InventoryStockItem): Promise<void> {
   try {
     await setDoc(doc(db, STOCK_COL, item.id), item);
+    
+    // TRIGGER: The exact millisecond any item's stock quantity hits 0, trigger an email notification sequence.
+    if (item.qty === 0) {
+      console.log(`[ALERT] Inventory item ${item.name} has hit 0! Triggering out-of-stock notification to manager.`);
+      try {
+        const mailCol = collection(db, "mail");
+        await addDoc(mailCol, {
+          to: "manager@ngo.org",
+          message: {
+            subject: `[CRITICAL OUT OF STOCK] Alert for Item: ${item.name}`,
+            text: `Dear Manager, the item '${item.name}' (Category: ${item.category}) has reached 0 units. The system has automatically pushed it to the Urgent Needs view.`
+          },
+          createdAt: new Date().toISOString()
+        });
+        console.log(`[ALERT SUCCESS] Out-of-stock mail document written to Firestore 'mail' collection.`);
+      } catch (mailError) {
+        console.error("Failed to write to 'mail' collection for Firebase Trigger Email Extension:", mailError);
+      }
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `${STOCK_COL}/${item.id}`);
   }
