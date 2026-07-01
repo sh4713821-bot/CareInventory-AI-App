@@ -142,10 +142,13 @@ export default function DonorDashboard({
     doc.text("Authorized Signature: CareInventory Logistics Officer", 14, finalY + 12);
     doc.line(14, finalY + 18, 100, finalY + 18);
     
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(10);
+    // Split the thank-you message to ensure it doesn't overflow and center-align it
+    const thankYouMessage = "Thank you for your generous support in managing healthcare and community resources efficiently.";
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
     doc.setTextColor(30, 58, 138);
-    doc.text("Thank you for your generous support.", 14, finalY + 28);
+    const splitThankYou = doc.splitTextToSize(thankYouMessage, 180);
+    doc.text(splitThankYou, 105, finalY + 28, { align: 'center' });
     
     doc.save(`Donation_Receipt_${item.id.replace('#', '')}.pdf`);
   };

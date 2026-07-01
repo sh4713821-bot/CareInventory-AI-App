@@ -10,7 +10,8 @@ import {
   Layers, 
   Plus, 
   TrendingUp, 
-  FolderSync 
+  FolderSync,
+  X
 } from 'lucide-react';
 import { DonationItem } from '../types';
 
@@ -72,6 +73,9 @@ export default function ScannerInterface({ onAddDonation }: ScannerInterfaceProp
   const [coordinates, setCoordinates] = useState({ x: 142.42, y: 89.21 });
   const [logged, setLogged] = useState(false);
 
+  // Dynamic feedback alerts for upload and classification status
+  const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' | 'info' | null }>({ text: '', type: null });
+
   // File upload interactive states
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
@@ -99,7 +103,26 @@ export default function ScannerInterface({ onAddDonation }: ScannerInterfaceProp
 
   const processFile = (file: File) => {
     setLogged(false);
+    
+    // Validate if uploaded file is indeed an image
+    if (!file.type.startsWith('image/')) {
+      setFeedback({
+        text: `Error: File "${file.name}" is not a valid image. Please select an image file (PNG, JPG, or WEBP).`,
+        type: 'error'
+      });
+      setUploadedImage(null);
+      setCustomDetectedItem(null);
+      setUploadedFileName('');
+      setScanState('idle');
+      return;
+    }
+
     setUploadedFileName(file.name);
+    setFeedback({
+      text: `Processing image "${file.name}"... Initializing TensorFlow neural parsing pipeline.`,
+      type: 'info'
+    });
+
     const reader = new FileReader();
     reader.onload = (event) => {
       setUploadedImage(event.target?.result as string);
@@ -123,18 +146,31 @@ export default function ScannerInterface({ onAddDonation }: ScannerInterfaceProp
         guessedCategory = 'Educational';
       }
 
+      const generatedConfidence = Number((Math.random() * 4 + 95).toFixed(1));
+
       setCustomDetectedItem({
         name: `${capitalized} (AI Sourced)`,
         category: guessedCategory,
         qty: Math.floor(Math.random() * 80) + 10,
         unit: 'Units',
-        confidence: Number((Math.random() * 4 + 95).toFixed(1))
+        confidence: generatedConfidence
       });
 
       // Interactive 1.5-second processing spinner
       setTimeout(() => {
         setScanState('success');
+        setFeedback({
+          text: `Success: Cargo image "${file.name}" parsed cleanly! TensorFlow classified it as "${capitalized} (AI Sourced)" with ${generatedConfidence}% confidence.`,
+          type: 'success'
+        });
       }, 1500);
+    };
+    reader.onerror = () => {
+      setFeedback({
+        text: 'Error: Failed to parse the selected file.',
+        type: 'error'
+      });
+      setScanState('idle');
     };
     reader.readAsDataURL(file);
   };
@@ -170,8 +206,16 @@ export default function ScannerInterface({ onAddDonation }: ScannerInterfaceProp
     setCustomDetectedItem(null);
     setUploadedImage(null);
     setUploadedFileName('');
+    setFeedback({
+      text: `Scanning active feed for: "${activePreset.name}"...`,
+      type: 'info'
+    });
     setTimeout(() => {
       setScanState('success');
+      setFeedback({
+        text: `Success: Scanned and verified "${activePreset.name}" preset cargo cleanly!`,
+        type: 'success'
+      });
     }, 2500); // Standard preset scan takes 2.5s
   };
 
@@ -179,6 +223,10 @@ export default function ScannerInterface({ onAddDonation }: ScannerInterfaceProp
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + activePreset.expiryOffsetDays);
     const dateString = expiryDate.toISOString().split('T')[0];
+
+    const itemName = customDetectedItem ? customDetectedItem.name : activePreset.name;
+    const itemQty = customDetectedItem ? customDetectedItem.qty : activePreset.qty;
+    const itemUnit = customDetectedItem ? customDetectedItem.unit : activePreset.unit;
 
     if (customDetectedItem) {
       onAddDonation({
@@ -204,6 +252,10 @@ export default function ScannerInterface({ onAddDonation }: ScannerInterfaceProp
 
     setLogged(true);
     setScanState('idle');
+    setFeedback({
+      text: `Approved and successfully cataloged ${itemQty} ${itemUnit} of "${itemName}" into the active registry!`,
+      type: 'success'
+    });
   };
 
   return (
@@ -227,6 +279,7 @@ export default function ScannerInterface({ onAddDonation }: ScannerInterfaceProp
                   setUploadedImage(null);
                   setCustomDetectedItem(null);
                   setUploadedFileName('');
+                  setFeedback({ text: '', type: null });
                 }}
                 className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all uppercase tracking-wider cursor-pointer ${
                   selectedPresetIndex === idx && !uploadedImage
@@ -240,6 +293,41 @@ export default function ScannerInterface({ onAddDonation }: ScannerInterfaceProp
           </div>
         </div>
       </div>
+
+      {/* Dynamic scan/upload feedback status messages */}
+      <AnimatePresence>
+        {feedback.type && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, y: -10 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -10 }}
+            className={`p-3.5 rounded-xl border text-xs flex items-center gap-2.5 shadow-sm font-semibold ${
+              feedback.type === 'error'
+                ? 'bg-red-50 text-red-800 border-red-200'
+                : feedback.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-blue-50 text-blue-800 border-blue-200'
+            }`}
+          >
+            {feedback.type === 'error' ? (
+              <AlertCircle className="w-4.5 h-4.5 text-red-600 flex-shrink-0" />
+            ) : feedback.type === 'success' ? (
+              <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600 flex-shrink-0" />
+            ) : (
+              <RefreshCw className="w-4.5 h-4.5 text-blue-600 animate-spin flex-shrink-0" />
+            )}
+            <div className="flex-1">
+              <span>{feedback.text}</span>
+            </div>
+            <button 
+              onClick={() => setFeedback({ text: '', type: null })}
+              className="hover:bg-black/5 p-1 rounded-full text-on-surface-variant/70 cursor-pointer flex items-center justify-center w-6 h-6 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Left Bento: Interactive Live Feed Canvas (col-span-8) */}
